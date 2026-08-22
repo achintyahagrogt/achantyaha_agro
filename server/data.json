@@ -1,0 +1,335 @@
+{
+  "users": [
+    {
+      "id": "user-admin",
+      "username": "admin",
+      "passwordHash": "$2a$10$msGKWSmRHua4adjl6flH1OJfhmQSMt6EDmnKoV.ziswCVbjC8MbV6",
+      "name": "Main Admin",
+      "role": "admin",
+      "permissions": [
+        "create",
+        "read",
+        "update",
+        "delete",
+        "manage_users"
+      ]
+    },
+    {
+      "id": "user-editor",
+      "username": "editor1",
+      "passwordHash": "$2a$10$HMXabxryea0smH5p2nPvYOatYZ5qR72B7LuaTxCyWfZ.C.n1.BfQu",
+      "name": "Product Editor",
+      "role": "editor",
+      "permissions": [
+        "read",
+        "update",
+        "create"
+      ]
+    }
+  ],
+  "products": [
+    {
+      "id": 1,
+      "name": "Achintyah Bio-NPK Consortia",
+      "category": "Bio Fertilizers",
+      "icon": "🌻",
+      "imageUrl": "https://images.unsplash.com/photo-1595974482597-4b8da8879bc5?w=600",
+      "tag": "Bestseller",
+      "desc": "Multi-strain bio-fertilizer with nitrogen-fixers, phosphate and potash solubilizers. Ideal for all crops.",
+      "benefit": "Improves soil fertility & crop yield",
+      "dose": "3–5 kg/acre",
+      "crops": "All field crops"
+    },
+    {
+      "id": 2,
+      "name": "Achintyah Seaweed Power",
+      "category": "Organic Inputs",
+      "icon": "🌊",
+      "imageUrl": "https://images.unsplash.com/photo-1530836369250-ef72a3f5cda8?w=600&auto=format&fit=crop&q=80",
+      "tag": "New",
+      "desc": "Cold-processed Ascophyllum nodosum seaweed extract rich in cytokinins, betaines and natural PGRs.",
+      "benefit": "Stimulates vegetative growth",
+      "dose": "500 ml–1 L/acre",
+      "crops": "Vegetables, Fruits"
+    },
+    {
+      "id": 3,
+      "name": "Achintyah NutriCal-Bor",
+      "category": "Micronutrients",
+      "icon": "🔬",
+      "imageUrl": "https://images.unsplash.com/photo-1628352081506-83c43123ed6d?w=600&auto=format&fit=crop&q=80",
+      "tag": "Premium",
+      "desc": "Chelated Calcium + Boron combination for strong cell walls, fruit quality and prevention of physiological disorders.",
+      "benefit": "Prevents tip burn & fruit cracking",
+      "dose": "1–2 kg/acre",
+      "crops": "Grapes, Tomato, Chilli"
+    },
+    {
+      "id": 4,
+      "name": "Achintyah Sticko-Spread",
+      "category": "Organic Inputs",
+      "icon": "💧",
+      "imageUrl": "https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?w=600&auto=format&fit=crop&q=80",
+      "tag": "",
+      "desc": "Organic spreader-sticker adjuvant that enhances pesticide and fertilizer coverage on leaf surfaces.",
+      "benefit": "Improves spray efficacy by 40%",
+      "dose": "0.5 ml/L spray",
+      "crops": "Universal"
+    },
+    {
+      "id": 5,
+      "name": "Achintyah Dev-Gibb PGR",
+      "category": "Growth Regulators",
+      "icon": "🌱",
+      "imageUrl": "https://images.unsplash.com/photo-1536657464919-892534f60d6e?w=600&auto=format&fit=crop&q=80",
+      "tag": "Popular",
+      "desc": "Gibberellic Acid 0.001% formulation for berry elongation, fruit setting and seedless grape production.",
+      "benefit": "Better berry size & uniformity",
+      "dose": "2–4 ml/10 L",
+      "crops": "Grapes, Citrus"
+    },
+    {
+      "id": 6,
+      "name": "Achintyah Beauveria-Max",
+      "category": "Bio Pesticides",
+      "icon": "🛡️",
+      "imageUrl": "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=600&auto=format&fit=crop&q=80",
+      "tag": "",
+      "desc": "Beauveria bassiana-based bio-insecticide effective against whitefly, thrips, aphids and mealybugs.",
+      "benefit": "Eco-safe pest management",
+      "dose": "1 kg/acre",
+      "crops": "Vegetables, Cotton"
+    },
+    {
+      "id": 7,
+      "name": "Achintyah WSF 19:19:19",
+      "category": "Water Soluble",
+      "icon": "⚗️",
+      "imageUrl": "https://images.unsplash.com/photo-1585314062340-f1a5a7c9328d?w=600&auto=format&fit=crop&q=80",
+      "tag": "Bestseller",
+      "desc": "Balanced N:P:K 19-19-19 + TE water-soluble fertilizer for drip irrigation and foliar spray.",
+      "benefit": "Complete balanced nutrition",
+      "dose": "3–5 kg/acre",
+      "crops": "All crops"
+    },
+    {
+      "id": 8,
+      "name": "Achintyah WSF 13:0:45",
+      "category": "Water Soluble",
+      "icon": "⚗️",
+      "imageUrl": "https://images.unsplash.com/photo-1595974482597-4b8da8879bc5?w=600&auto=format&fit=crop&q=80",
+      "tag": "",
+      "desc": "High-potassium water-soluble fertilizer (Potassium Nitrate) for fruit development and quality improvement.",
+      "benefit": "Improves Brix, colour & shelf life",
+      "dose": "2–4 kg/acre",
+      "crops": "Fruits & Vegetables"
+    },
+    {
+      "id": 9,
+      "name": "Achintyah WSF 0:52:34",
+      "category": "Water Soluble",
+      "icon": "⚗️",
+      "imageUrl": "https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?w=600&auto=format&fit=crop&q=80",
+      "tag": "",
+      "desc": "Mono Ammonium Phosphate (MAP) for root development and early establishment of crops.",
+      "benefit": "Strong root growth",
+      "dose": "2–3 kg/acre",
+      "crops": "Nursery, Transplanted crops"
+    },
+    {
+      "id": 10,
+      "name": "Achintyah Zinc-EDTA",
+      "category": "Micronutrients",
+      "icon": "🔬",
+      "imageUrl": "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=600&auto=format&fit=crop&q=80",
+      "tag": "",
+      "desc": "Fully chelated EDTA Zinc 12% for rapid correction of zinc deficiency in soil and foliar application.",
+      "benefit": "Corrects zinc deficiency fast",
+      "dose": "500 g–1 kg/acre",
+      "crops": "Rice, Maize, Wheat"
+    },
+    {
+      "id": 11,
+      "name": "Achintyah Humic Power",
+      "category": "Organic Inputs",
+      "icon": "🌍",
+      "imageUrl": "https://images.unsplash.com/photo-1464226184884-fa280b87c399?w=600&auto=format&fit=crop&q=80",
+      "tag": "Eco-Star",
+      "desc": "Potassium Humate 98% soluble granules from leonardite for improving soil structure and nutrient retention.",
+      "benefit": "Enhances CEC & water holding",
+      "dose": "1–2 kg/acre",
+      "crops": "All crops"
+    },
+    {
+      "id": 12,
+      "name": "Achintyah Tricho-Shield",
+      "category": "Bio Pesticides",
+      "icon": "🛡️",
+      "imageUrl": "https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=600&auto=format&fit=crop&q=80",
+      "tag": "New",
+      "desc": "Trichoderma viride + T. harzianum consortium for biological control of soil-borne fungal diseases.",
+      "benefit": "Prevents damping off & wilt",
+      "dose": "1–2 kg/acre (soil drench)",
+      "crops": "Vegetables, Pulses"
+    }
+  ],
+  "inquiries": [
+    {
+      "id": "inq-1784895086974",
+      "date": "24/7/2026, 5:41:26 pm",
+      "name": "Customer Inquiry",
+      "email": "info@achintyah.com",
+      "phone": "+91 XXXXXXXXXX",
+      "subject": "bulk",
+      "message": "Bulk order inquiry for Bio-Fertilizers and Micronutrient products.",
+      "status": "New"
+    },
+    {
+      "id": "inq-1784807066176",
+      "date": "23/7/2026, 5:14:26 pm",
+      "name": "Customer Inquiry",
+      "email": "info@achintyah.com",
+      "phone": "+91 XXXXXXXXXX",
+      "subject": "product",
+      "message": "Product price inquiry",
+      "status": "New"
+    },
+    {
+      "id": "inq-1784806083950",
+      "date": "23/7/2026, 4:58:03 pm",
+      "name": "Customer Inquiry",
+      "email": "info@achintyah.com",
+      "phone": "+91 XXXXXXXXXX",
+      "subject": "Bulk Order & Quotation",
+      "message": "Bulk Order & Quotation request.",
+      "status": "New"
+    }
+  ],
+  "homeContent": {
+    "aboutTitle": "About Achintyah Agrogreentech Pvt. Ltd.",
+    "aboutDesc": "We are committed to providing innovative, reliable and eco-friendly agricultural solutions that enhance soil health, improve productivity and build a sustainable future for agriculture.",
+    "check1": "Quality Assurance",
+    "check2": "Timely Delivery",
+    "check3": "Expert Technical Support",
+    "check4": "Farmer-Centric Approach",
+    "badgeNum": "10+",
+    "badgeTxt": "Years of Excellence",
+    "mainImg": "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&auto=format&fit=crop&q=80",
+    "sideImg1": "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=600&auto=format&fit=crop&q=80",
+    "sideImg2": "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=600&auto=format&fit=crop&q=80"
+  },
+  "aboutContent": {
+    "officeTitle": "Achintyah Agrogreentech Pvt. Ltd.",
+    "officeAddress": "204, Mauli CHS, Plot No. D-22,\nSector 20, Nerul, Navi Mumbai,\nMaharashtra, India - 400706",
+    "officeTag1": "CIN Registered",
+    "officeTag2": "MCA Compliant",
+    "certifications": [
+      {
+        "id": 1,
+        "icon": "🏅",
+        "title": "ISO 9001:2015",
+        "desc": "Quality Management System Certified",
+        "imageUrl": "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=500&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": 2,
+        "icon": "🌿",
+        "title": "FCO Approved",
+        "desc": "Fertilizer Control Order Compliant",
+        "imageUrl": "https://images.unsplash.com/photo-1530836369250-ef72a3f5cda8?w=500&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": 3,
+        "icon": "🏭",
+        "title": "GMP Certified",
+        "desc": "Good Manufacturing Practices",
+        "imageUrl": "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=500&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": 4,
+        "icon": "📋",
+        "title": "MCA Registered",
+        "desc": "Ministry of Corporate Affairs, India",
+        "imageUrl": "https://images.unsplash.com/photo-1450133064473-71024230f91b?w=500&auto=format&fit=crop&q=80"
+      }
+    ],
+    "team": [
+      {
+        "id": 1,
+        "name": "Director",
+        "role": "Management & Strategy",
+        "initial": "D",
+        "color": "#1a472a",
+        "imageUrl": "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=500&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": 2,
+        "name": "Agronomy Head",
+        "role": "Crop Science & Advisory",
+        "initial": "H",
+        "color": "#40916c",
+        "imageUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=500&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": 3,
+        "name": "R&D Lead",
+        "role": "Product Formulation",
+        "initial": "R",
+        "color": "#c8962c",
+        "imageUrl": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&auto=format&fit=crop&q=80"
+      },
+      {
+        "id": 4,
+        "name": "Operations Head",
+        "role": "Supply Chain & Logistics",
+        "initial": "O",
+        "color": "#5c4033",
+        "imageUrl": "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=500&auto=format&fit=crop&q=80"
+      }
+    ]
+  },
+  "servicesContent": {
+    "heroTitle": "Professional Agricultural Services",
+    "heroSub": "Empowering farmers with expert advisory, customized soil health solutions, and high-yield farming support.",
+    "services": [
+      {
+        "id": 1,
+        "icon": "🌾",
+        "title": "Crop Nutrition Advisory",
+        "desc": "Customized crop nutrition programs based on soil test reports, crop variety, water quality, and target yield.",
+        "features": ["Soil & water analysis interpretation", "Crop-stage nutrition scheduling", "Deficiency correction", "Yield improvement strategy"]
+      },
+      {
+        "id": 2,
+        "icon": "🔬",
+        "title": "Product Technical Support",
+        "desc": "Technical guidance on product selection, dose calibration, compatibility testing, and application methods.",
+        "features": ["Dose & dilution guidance", "Spray schedule planning", "Compatibility charts", "Field trial support"]
+      },
+      {
+        "id": 3,
+        "icon": "🚜",
+        "title": "Dealer & Distributor Support",
+        "desc": "Partnership programs with agri-dealers, distributors, and FPOs across India with preferential pricing.",
+        "features": ["Dealer training programs", "Promotional support", "Demo trial kits", "Bulk order discounts"]
+      },
+      {
+        "id": 4,
+        "icon": "📊",
+        "title": "Farm-to-Market Consulting",
+        "desc": "Helping farmers plan production to meet market quality requirements, residue-free protocols, and export standards.",
+        "features": ["Residue-free farming protocol", "GlobalGAP support", "Export quality planning", "Market linkage guidance"]
+      }
+    ]
+  },
+  "contactContent": {
+    "phonePrimary": "+91 98765 43210",
+    "phoneSecondary": "+91 98765 43211",
+    "emailPrimary": "info@achintyah.com",
+    "emailSupport": "support@achintyah.com",
+    "officeAddress": "204, Mauli CHS, Plot No. D-22,\nSector 20, Nerul, Navi Mumbai,\nMaharashtra, India - 400706",
+    "workingHours": "Monday – Saturday: 9:00 AM – 6:30 PM (Sunday Closed)",
+    "mapEmbedUrl": "https://maps.google.com/?q=Nerul+Navi+Mumbai"
+  },
+  "snapshots": []
+}

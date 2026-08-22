@@ -1,0 +1,44 @@
+.language-selector {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-right: 12px;
+}
+
+.lang-dropdown-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #c8e6c9;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1b5e20;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.lang-dropdown-btn:hover {
+  background: #e8f5e9;
+  border-color: #2e7d32;
+}
+
+.lang-select-menu {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1b5e20;
+  cursor: pointer;
+  outline: none;
+  padding-right: 16px;
+}
+
+.lang-arrow {
+  font-size: 10px;
+  color: #2e7d32;
+}
