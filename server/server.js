@@ -567,7 +567,7 @@ if (fs.existsSync(buildPath)) {
 }
 
 // Wildcard SPA route fallback for React Router
-app.get('*', (req, res) => {
+app.get('/{*splat}', (req, res) => {
   if (req.path.startsWith('/api')) {
     return res.status(404).json({ message: 'API endpoint not found' });
   }
