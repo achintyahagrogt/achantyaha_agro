@@ -78,7 +78,7 @@ const Footer = () => {
                 <span className="contact-icon">📞</span>
                 <div>
                   <strong>Phone</strong>
-                  <p>++91 70392 06369</p>
+                  <p>+91 XXXXXXXXXX</p>
                 </div>
               </div>
               <div className="footer-contact-item">
