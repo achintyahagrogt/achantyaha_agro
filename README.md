@@ -54,9 +54,6 @@ Open your browser at `http://localhost:3000`.
 
 ## 🔑 Administrative Control Panel
 
-Access the Admin Panel at `/admin` or click **🔐 Login** in the header navigation:
-
-- **Admin Login**: `admin` / `admin123`
 - **Features**:
   - 📬 **Quotation Requests**: Manage customer queries with status tracking (`🔴 New` ➔ `🟡 In Progress` ➔ `🟢 Resolved`), filtering, and 1-click email reply.
   - 📦 **Product Catalog**: Add, edit, or delete products with automatic image previews and category filters.

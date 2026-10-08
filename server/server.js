@@ -1,10 +1,14 @@
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+console.log('[ENV CHECK]', {
+  project: !!process.env.FIREBASE_PROJECT_ID,
+  clientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
+  privateKey: !!process.env.FIREBASE_PRIVATE_KEY,
+  adminEmail: !!process.env.FIREBASE_ADMIN_EMAIL
+});
 const express = require('express');
 const cors = require('cors');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 
 const rateLimit = require('express-rate-limit');
@@ -39,67 +43,14 @@ const contactLimiter = rateLimit({
   legacyHeaders: false
 });
 
+/// ----------------------------------------------------
+// AUTH ROUTES - FIREBASE AUTHENTICATION
 // ----------------------------------------------------
-// AUTH ROUTES
-// ----------------------------------------------------
-app.post('/api/auth/login', loginLimiter, async (req, res) => {
-  const { username, password } = req.body;
-
-  if (!username || !password) {
-    return res.status(400).json({ message: 'Username and password are required' });
-  }
-
-  const users = getUsers();
-  const user = users.find(u => u.username.toLowerCase() === username.toLowerCase());
-
-  if (!user) {
-    return res.status(401).json({ message: 'Invalid credentials' });
-  }
-
-  let isMatch = false;
-  if (user.passwordHash) {
-    try {
-      isMatch = await bcrypt.compare(password, user.passwordHash);
-    } catch (e) {}
-  }
-
-  if (!isMatch) {
-    const defaultPasswords = {
-      admin: 'admin123',
-      editor1: 'editor123'
-    };
-    if (defaultPasswords[user.username] === password) {
-      isMatch = true;
-      // Auto-heal hash
-      user.passwordHash = await bcrypt.hash(password, 10);
-      setUsers(users);
-    }
-  }
-
-  if (!isMatch) {
-    return res.status(401).json({ message: 'Invalid credentials' });
-  }
-
-  const token = jwt.sign(
-    { id: user.id, username: user.username, role: user.role },
-    JWT_SECRET,
-    { expiresIn: '24h' }
-  );
-
-  return res.json({
-    token,
-    user: {
-      id: user.id,
-      username: user.username,
-      name: user.name,
-      role: user.role,
-      permissions: user.permissions || []
-    }
-  });
-});
 
 app.get('/api/auth/me', authenticateToken, (req, res) => {
-  res.json({ user: req.user });
+  res.json({
+    user: req.user
+  });
 });
 
 // ----------------------------------------------------
@@ -580,9 +531,12 @@ app.get('/{*splat}', (req, res) => {
 });
 
 if (require.main === module) {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`Achintyah Agro backend server running on port ${PORT}`);
+    console.log('SERVER ADDRESS:', server.address());
+  });
+
+  server.on('error', (error) => {
+    console.error('SERVER ERROR:', error);
   });
 }
-
-module.exports = app;
