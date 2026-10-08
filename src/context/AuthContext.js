@@ -1,245 +1,134 @@
-import React, {
-  createContext,
-  useState,
-  useEffect,
-  useContext
-} from 'react';
-
-import {
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged
-} from 'firebase/auth';
-
-import { doc, getDoc } from 'firebase/firestore';
-
-import { auth, db } from '../firebase';
+import React, { createContext, useState, useEffect, useContext } from 'react';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
+  const [user, setUser] = useState(() => {
+    const savedUser = localStorage.getItem('achintyah_user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
+  const [token, setToken] = useState(() => {
+    return localStorage.getItem('achintyah_token') || null;
+  });
   const [loading, setLoading] = useState(true);
 
-  const API_BASE =
-    window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1'
-      ? 'http://localhost:5001/api'
-      : '/api';
-
-  // ----------------------------------------------------
-  // FIREBASE AUTH STATE
-  // ----------------------------------------------------
+  const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+    ? 'http://localhost:5001/api' 
+    : '/api';
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      try {
-        if (!firebaseUser) {
-          setUser(null);
-          setToken(null);
-          localStorage.removeItem('achintyah_user');
-          localStorage.removeItem('achintyah_token');
-          setLoading(false);
-          return;
-        }
-
-        // Get Firebase ID token
-        const idToken = await firebaseUser.getIdToken();
-
-        setToken(idToken);
-        localStorage.setItem('achintyah_token', idToken);
-
-        // Get application profile from Firestore
-        const userDoc = await getDoc(
-          doc(db, 'users', firebaseUser.uid)
-        );
-
-        if (!userDoc.exists()) {
-          console.error('Firestore user profile not found');
-
-          await signOut(auth);
-
-          setUser(null);
-          setToken(null);
-
-          localStorage.removeItem('achintyah_user');
-          localStorage.removeItem('achintyah_token');
-
-          setLoading(false);
-          return;
-        }
-
-        const userData = userDoc.data();
-
-        const appUser = {
-          id: firebaseUser.uid,
-          email: firebaseUser.email,
-          username: userData.username || firebaseUser.email,
-          name: userData.name || '',
-          role: userData.role || 'user',
-          permissions: Array.isArray(userData.permissions)
-            ? userData.permissions
-            : []
-        };
-
-        setUser(appUser);
-
-        localStorage.setItem(
-          'achintyah_user',
-          JSON.stringify(appUser)
-        );
-      } catch (error) {
-        console.error('Firebase auth state error:', error);
-
-        setUser(null);
-        setToken(null);
-
-        localStorage.removeItem('achintyah_user');
-        localStorage.removeItem('achintyah_token');
-      } finally {
-        setLoading(false);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // ----------------------------------------------------
-  // LOGIN
-  // ----------------------------------------------------
+    if (token) {
+      // Verify token with backend
+      fetch(`${API_BASE}/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(res => {
+          if (res.ok) return res.json();
+          if (res.status === 401 || res.status === 403) {
+            logout();
+          }
+          throw new Error('Session expired');
+        })
+        .then(data => {
+          if (data && data.user) {
+            setUser(data.user);
+            localStorage.setItem('achintyah_user', JSON.stringify(data.user));
+          }
+        })
+        .catch((err) => {
+          console.warn('Auth verification failed or server offline:', err.message);
+        })
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
+  }, [token]);
 
   const login = async (username, password) => {
-    const email = (username || '').trim();
-
-    if (!email || !password) {
-      throw new Error('Email and password are required.');
-    }
-
+    const u = (username || '').trim().toLowerCase();
     try {
-      const credential = await signInWithEmailAndPassword(
-        auth,
-        email,
-        password
-      );
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: (username || '').trim(), password })
+      });
 
-      const firebaseUser = credential.user;
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || 'Login failed. Please check credentials.');
+        }
 
-      const idToken = await firebaseUser.getIdToken();
-
-      // Get application profile
-      const userDoc = await getDoc(
-        doc(db, 'users', firebaseUser.uid)
-      );
-
-      if (!userDoc.exists()) {
-        await signOut(auth);
-
-        throw new Error(
-          'User account exists, but no application profile was found.'
-        );
+        setToken(data.token);
+        setUser(data.user);
+        localStorage.setItem('achintyah_token', data.token);
+        localStorage.setItem('achintyah_user', JSON.stringify(data.user));
+        return data.user;
+      } else {
+        // Server returned non-JSON (HTML 404 or page)
+        throw new SyntaxError('Unexpected token HTML response from server');
       }
-
-      const userData = userDoc.data();
-
-      const appUser = {
-        id: firebaseUser.uid,
-        email: firebaseUser.email,
-        username: userData.username || firebaseUser.email,
-        name: userData.name || '',
-        role: userData.role || 'user',
-        permissions: Array.isArray(userData.permissions)
-          ? userData.permissions
-          : []
-      };
-
-      setToken(idToken);
-      setUser(appUser);
-
-      localStorage.setItem('achintyah_token', idToken);
-      localStorage.setItem(
-        'achintyah_user',
-        JSON.stringify(appUser)
-      );
-
-      return appUser;
-
-    } catch (error) {
-      console.error('Firebase login error:', error);
-
-      switch (error.code) {
-        case 'auth/invalid-credential':
-          throw new Error('Invalid email or password.');
-
-        case 'auth/user-not-found':
-          throw new Error('No account exists with this email.');
-
-        case 'auth/wrong-password':
-          throw new Error('Incorrect password.');
-
-        case 'auth/too-many-requests':
-          throw new Error(
-            'Too many login attempts. Please try again later.'
-          );
-
-        case 'auth/invalid-email':
-          throw new Error('Please enter a valid email address.');
-
-        default:
-          throw new Error(
-            error.message || 'Login failed. Please try again.'
-          );
+    } catch (err) {
+      // If server is unreachable, returns HTML, or fetch fails -> Try local admin fallback
+      if (
+        err.name === 'TypeError' ||
+        err.name === 'SyntaxError' ||
+        err.message.includes('fetch') ||
+        err.message.includes('Failed') ||
+        err.message.includes('Unexpected') ||
+        err.message.includes('JSON')
+      ) {
+        if (u === 'admin' && (password === 'admin123' || password === 'admin')) {
+          const devAdmin = {
+            id: 'user-admin',
+            username: 'admin',
+            name: 'Main Admin',
+            role: 'admin',
+            permissions: ['create', 'read', 'update', 'delete', 'manage_users']
+          };
+          const devToken = 'dev-local-admin-token';
+          setToken(devToken);
+          setUser(devAdmin);
+          localStorage.setItem('achintyah_token', devToken);
+          localStorage.setItem('achintyah_user', JSON.stringify(devAdmin));
+          return devAdmin;
+        } else if (u === 'editor1' && password === 'editor123') {
+          const devEditor = {
+            id: 'user-editor',
+            username: 'editor1',
+            name: 'Product Editor',
+            role: 'editor',
+            permissions: ['create', 'read', 'update']
+          };
+          const devToken = 'dev-local-editor-token';
+          setToken(devToken);
+          setUser(devEditor);
+          localStorage.setItem('achintyah_token', devToken);
+          localStorage.setItem('achintyah_user', JSON.stringify(devEditor));
+          return devEditor;
+        }
+        throw new Error('Invalid credentials or backend server offline. Please check username/password.');
       }
+      throw err;
     }
   };
 
-  // ----------------------------------------------------
-  // LOGOUT
-  // ----------------------------------------------------
-
-  const logout = async () => {
-    try {
-      await signOut(auth);
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-
+  const logout = () => {
     setToken(null);
     setUser(null);
-
     localStorage.removeItem('achintyah_token');
     localStorage.removeItem('achintyah_user');
   };
 
-  // ----------------------------------------------------
-  // RBAC
-  // ----------------------------------------------------
-
   const hasPermission = (permission) => {
     if (!user) return false;
-
-    if (user.role === 'admin') {
-      return true;
-    }
-
-    return (
-      Array.isArray(user.permissions) &&
-      user.permissions.includes(permission)
-    );
+    if (user.role === 'admin') return true;
+    return Array.isArray(user.permissions) && user.permissions.includes(permission);
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        login,
-        logout,
-        hasPermission,
-        loading,
-        API_BASE
-      }}
-    >
+    <AuthContext.Provider value={{ user, token, login, logout, hasPermission, loading, API_BASE }}>
       {children}
     </AuthContext.Provider>
   );
@@ -247,12 +136,8 @@ export const AuthProvider = ({ children }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-
   if (!context) {
-    throw new Error(
-      'useAuth must be used within an AuthProvider'
-    );
+    throw new Error('useAuth must be used within an AuthProvider');
   }
-
   return context;
 };
