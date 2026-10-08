@@ -245,7 +245,7 @@ const Contact = () => {
                     </div>
                     <div className={`form-group ${errors.phone ? 'error' : ''}`}>
                       <label>Phone Number *</label>
-                      <input type="tel" name="phone" value={form.phone} onChange={handleChange} placeholder="+91 XXXXX XXXXX" />
+                      <input type="tel" name="phone" value={form.phone} onChange={handleChange} placeholder="+91 70392 06369" />
                       {errors.phone && <span className="err-msg">{errors.phone}</span>}
                     </div>
                   </div>
