@@ -174,15 +174,15 @@
     },
     {
       "id": 13,
-      "name": "ABCD",
-      "category": "Bio Fertilizers",
-      "icon": "🌿",
-      "imageUrl": "https://www.thrivelot.com/resources/5-crop-rotation-tips-to-prevent-plant-diseases",
-      "tag": "",
-      "desc": "blahdhusniucnoncoieivcjioernvcen",
-      "benefit": "Improves this this this",
-      "dose": "",
-      "crops": "alll"
+      "name": "BIO-NPK",
+      "category": "Water Soluble",
+      "icon": "💧",
+      "imageUrl": "/uploads/bat_jpg_1792481581930_xfau.jpg",
+      "tag": "New",
+      "desc": "that that this this ",
+      "benefit": "this this that that",
+      "dose": "3-5kg/acer",
+      "crops": "Fruits"
     }
   ],
   "inquiries": [
@@ -402,10 +402,10 @@
     ]
   },
   "contactContent": {
-    "phonePrimary": "+91 98765 43210",
-    "phoneSecondary": "+91 98765 43211",
+    "phonePrimary": "‪+91 70392 06369‬",
+    "phoneSecondary": "",
     "emailPrimary": "info@achintyah.com",
-    "emailSupport": "support@achintyah.com",
+    "emailSupport": "",
     "officeAddress": "204, Mauli CHS, Plot No. D-22,\nSector 20, Nerul, Navi Mumbai,\nMaharashtra, India - 400706",
     "workingHours": "Monday – Saturday: 9:00 AM – 6:30 PM (Sunday Closed)",
     "mapEmbedUrl": "https://maps.google.com/?q=Nerul+Navi+Mumbai"

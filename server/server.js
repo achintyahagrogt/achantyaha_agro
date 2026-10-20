@@ -73,19 +73,23 @@ app.post('/api/products', authenticateToken, requirePermission('create'), (req, 
   }
 
   const products = getProducts();
-  const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
+  const maxId = products.reduce((max, p) => {
+    const num = Number(p.id);
+    return !isNaN(num) && num > max ? num : max;
+  }, 0);
+  const newId = maxId + 1;
 
   const newProduct = {
     id: newId,
-    name,
-    category,
+    name: name.trim(),
+    category: category.trim(),
     icon: icon || '🌱',
     imageUrl: imageUrl || '',
-    tag: tag || '',
-    desc: desc || '',
-    benefit: benefit || '',
-    dose: dose || '',
-    crops: crops || ''
+    tag: tag ? tag.trim() : '',
+    desc: desc ? desc.trim() : '',
+    benefit: benefit ? benefit.trim() : '',
+    dose: dose ? dose.trim() : '',
+    crops: crops ? crops.trim() : ''
   };
 
   products.push(newProduct);
@@ -95,9 +99,10 @@ app.post('/api/products', authenticateToken, requirePermission('create'), (req, 
 });
 
 app.put('/api/products/:id', authenticateToken, requirePermission('update'), (req, res) => {
-  const productId = parseInt(req.params.id, 10);
+  const reqId = req.params.id;
+  const numId = parseInt(reqId, 10);
   const products = getProducts();
-  const index = products.findIndex(p => p.id === productId);
+  const index = products.findIndex(p => String(p.id) === String(reqId) || p.id === numId);
 
   if (index === -1) {
     return res.status(404).json({ message: 'Product not found' });
@@ -106,7 +111,7 @@ app.put('/api/products/:id', authenticateToken, requirePermission('update'), (re
   const updatedProduct = {
     ...products[index],
     ...req.body,
-    id: productId
+    id: products[index].id
   };
 
   products[index] = updatedProduct;
@@ -116,9 +121,10 @@ app.put('/api/products/:id', authenticateToken, requirePermission('update'), (re
 });
 
 app.delete('/api/products/:id', authenticateToken, requirePermission('delete'), (req, res) => {
-  const productId = parseInt(req.params.id, 10);
+  const reqId = req.params.id;
+  const numId = parseInt(reqId, 10);
   const products = getProducts();
-  const filtered = products.filter(p => p.id !== productId);
+  const filtered = products.filter(p => String(p.id) !== String(reqId) && p.id !== numId);
 
   if (filtered.length === products.length) {
     return res.status(404).json({ message: 'Product not found' });
@@ -358,7 +364,12 @@ app.put('/api/home-content', authenticateToken, requirePermission('update'), (re
 });
 
 // Image Upload Endpoint for Admin Panel (supports base64 upload up to 10MB)
-app.post('/api/upload-image', authenticateToken, requirePermission('update'), express.json({ limit: '10mb' }), (req, res) => {
+app.post('/api/upload-image', authenticateToken, (req, res, next) => {
+  if (req.user && (req.user.role === 'admin' || (Array.isArray(req.user.permissions) && (req.user.permissions.includes('update') || req.user.permissions.includes('create'))))) {
+    return next();
+  }
+  return res.status(403).json({ message: "Access denied. Requires 'create' or 'update' permission." });
+}, express.json({ limit: '10mb' }), (req, res) => {
   try {
     const { imageBase64, filename } = req.body;
     if (!imageBase64) {

@@ -42,6 +42,10 @@ const Admin = () => {
   const [productForm, setProductForm] = useState({
     name: '', category: 'Bio Fertilizers', icon: '🌿', imageUrl: '', tag: '', desc: '', benefit: '', dose: '', crops: ''
   });
+  const [productViewMode, setProductViewMode] = useState('cards'); // 'cards' or 'table'
+  const [productImageTab, setProductImageTab] = useState('upload'); // 'upload' or 'link'
+  const [productImageUploading, setProductImageUploading] = useState(false);
+  const [highlightedProductId, setHighlightedProductId] = useState(null);
 
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [userForm, setUserForm] = useState({
@@ -168,14 +172,10 @@ const Admin = () => {
       list = [...defaultProducts];
     }
 
-    // Filter out test items
-    list = list.filter(p => p.name && p.name !== 'XYZ' && p.name !== 'Abc');
-
     try {
       const localProds = JSON.parse(localStorage.getItem('achintyah_products') || '[]');
       localProds.forEach(lp => {
-        if (lp.name === 'XYZ' || lp.name === 'Abc') return;
-        const idx = list.findIndex(p => p.id === lp.id);
+        const idx = list.findIndex(p => String(p.id) === String(lp.id));
         if (idx !== -1) {
           list[idx] = lp;
         } else {
@@ -534,19 +534,74 @@ const Admin = () => {
     }
   };
 
+  // Product image upload handler (supports up to 10MB JPG/PNG/WebP/GIF)
+  const handleProductFileUpload = async (file) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image file size must be less than 10MB.');
+      return;
+    }
+    setProductImageUploading(true);
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64Data = reader.result;
+        // Instant visual preview in modal
+        setProductForm(prev => ({ ...prev, imageUrl: base64Data }));
+
+        try {
+          const res = await fetch(`${API_BASE}/upload-image`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              imageBase64: base64Data,
+              filename: file.name
+            })
+          });
+          const data = await res.json();
+          if (res.ok && data.url) {
+            setProductForm(prev => ({ ...prev, imageUrl: data.url }));
+            setMessage('✅ Product photo uploaded successfully!');
+          }
+        } catch (err) {
+          console.warn('Backend image upload offline, keeping base64 DataURL for product:', err);
+        } finally {
+          setProductImageUploading(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      setProductImageUploading(false);
+      alert(`Could not process file: ${err.message}`);
+    }
+  };
+
   // Product submit handler
   const handleProductSubmit = async (e) => {
     e.preventDefault();
     setMessage('');
 
+    if (!productForm.name || !productForm.name.trim()) {
+      alert('Please enter a valid product name.');
+      return;
+    }
+
     const formattedProductForm = {
       ...productForm,
+      name: productForm.name.trim(),
+      category: productForm.category ? productForm.category.trim() : 'Bio Fertilizers',
       imageUrl: formatImageUrl(productForm.imageUrl)
     };
 
     const isEdit = !!editingProduct;
     const url = isEdit ? `${API_BASE}/products/${editingProduct.id}` : `${API_BASE}/products`;
     const method = isEdit ? 'PUT' : 'POST';
+
+    let savedProduct = null;
 
     try {
       const res = await fetch(url, {
@@ -558,34 +613,64 @@ const Admin = () => {
         body: JSON.stringify(formattedProductForm)
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
+      if (!res.ok) throw new Error(data.message || 'Error saving product');
+      savedProduct = data.product;
+    } catch (err) {
+      console.warn('Backend product save offline fallback:', err.message);
+    }
 
-      // Save to LocalStorage fallback as well
-      const local = JSON.parse(localStorage.getItem('achintyah_products') || '[]');
+    if (!savedProduct) {
+      savedProduct = isEdit
+        ? { ...editingProduct, ...formattedProductForm }
+        : { id: Date.now(), ...formattedProductForm };
+    }
+
+    // 1. Optimistically update state so card is visible IMMEDIATELY at the top
+    setProducts(prev => {
       if (isEdit) {
-        const idx = local.findIndex(p => p.id === editingProduct.id);
-        if (idx !== -1) local[idx] = { ...editingProduct, ...formattedProductForm };
-        else local.push({ ...editingProduct, ...formattedProductForm });
+        return prev.map(p => String(p.id) === String(savedProduct.id) ? savedProduct : p);
       } else {
-        local.push(data.product || { id: Date.now(), ...formattedProductForm });
+        return [savedProduct, ...prev.filter(p => String(p.id) !== String(savedProduct.id))];
+      }
+    });
+
+    // 2. Persist to LocalStorage fallback
+    try {
+      const local = JSON.parse(localStorage.getItem('achintyah_products') || '[]');
+      const idx = local.findIndex(p => String(p.id) === String(savedProduct.id));
+      if (idx !== -1) {
+        local[idx] = savedProduct;
+      } else {
+        local.unshift(savedProduct);
       }
       localStorage.setItem('achintyah_products', JSON.stringify(local));
+    } catch (e) {}
 
-      setMessage(isEdit ? '✅ Product updated successfully!' : '✅ New product added successfully!');
-      setProductModalOpen(false);
-      fetchProducts();
-    } catch (err) {
-      setMessage(`Error: ${err.message}`);
-    }
+    // 3. Reset category filter & search so newly added product is never hidden by active filter
+    setProductCategoryFilter('All');
+    setProductSearch('');
+
+    // 4. Highlight the newly added/edited product card
+    setHighlightedProductId(savedProduct.id);
+    setTimeout(() => {
+      setHighlightedProductId(null);
+    }, 8000);
+
+    setMessage(isEdit ? '✅ Product updated successfully!' : '✅ New product added successfully to catalog!');
+    setProductModalOpen(false);
+    fetchProducts();
   };
 
   const handleDeleteProduct = async (id) => {
     if (!window.confirm('Are you sure you want to remove this product from the catalog?')) return;
     setMessage('');
 
+    // Optimistically remove from state
+    setProducts(prev => prev.filter(p => String(p.id) !== String(id)));
+
     try {
       const localProds = JSON.parse(localStorage.getItem('achintyah_products') || '[]');
-      const updated = localProds.filter(p => p.id !== id);
+      const updated = localProds.filter(p => String(p.id) !== String(id));
       localStorage.setItem('achintyah_products', JSON.stringify(updated));
     } catch (err) {}
 
@@ -1105,6 +1190,7 @@ const Admin = () => {
               onClick={() => {
                 setEditingProduct(null);
                 setProductForm({ name: '', category: 'Bio Fertilizers', icon: '🌿', imageUrl: '', tag: '', desc: '', benefit: '', dose: '', crops: '' });
+                setProductImageTab('upload');
                 setProductModalOpen(true);
               }}
             >
@@ -1112,84 +1198,245 @@ const Admin = () => {
             </button>
           </div>
 
-          <div style={{ display: 'flex', gap: '16px', margin: '16px 0', flexWrap: 'wrap' }}>
-            <input
-              type="text"
-              placeholder="Search product by name..."
-              value={productSearch}
-              onChange={e => setProductSearch(e.target.value)}
-              style={{ flex: 1, minWidth: '220px', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
-            />
-            <select
-              value={productCategoryFilter}
-              onChange={e => setProductCategoryFilter(e.target.value)}
-              style={{ padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
-            >
-              <option value="All">All Categories</option>
-              <option value="Bio Fertilizers">Bio Fertilizers</option>
-              <option value="Micronutrients">Micronutrients</option>
-              <option value="Water Soluble">Water Soluble</option>
-              <option value="Organic Inputs">Organic Inputs</option>
-              <option value="Growth Regulators">Growth Regulators</option>
-              <option value="Bio Pesticides">Bio Pesticides</option>
-            </select>
+          <div className="product-toolbar-row">
+            <div style={{ display: 'flex', gap: '12px', flex: 1, minWidth: '280px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <input
+                type="text"
+                placeholder="Search products by name, benefit, crops..."
+                value={productSearch}
+                onChange={e => setProductSearch(e.target.value)}
+                style={{ flex: 1, minWidth: '200px', padding: '9px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+              />
+              <select
+                value={productCategoryFilter}
+                onChange={e => setProductCategoryFilter(e.target.value)}
+                style={{ padding: '9px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', background: '#ffffff' }}
+              >
+                <option value="All">All Categories ({products.length})</option>
+                <option value="Bio Fertilizers">Bio Fertilizers</option>
+                <option value="Micronutrients">Micronutrients</option>
+                <option value="Water Soluble">Water Soluble</option>
+                <option value="Organic Inputs">Organic Inputs</option>
+                <option value="Growth Regulators">Growth Regulators</option>
+                <option value="Bio Pesticides">Bio Pesticides</option>
+              </select>
+              {(productCategoryFilter !== 'All' || productSearch) && (
+                <button
+                  type="button"
+                  className="btn-clear-filter"
+                  onClick={() => { setProductCategoryFilter('All'); setProductSearch(''); }}
+                >
+                  ✕ Clear Filters
+                </button>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>
+                Showing <strong>{filteredProducts.length}</strong> of <strong>{products.length}</strong>
+              </span>
+              <div className="product-view-toggle">
+                <button
+                  type="button"
+                  className={`view-toggle-btn ${productViewMode === 'cards' ? 'active' : ''}`}
+                  onClick={() => setProductViewMode('cards')}
+                >
+                  🎴 Card View
+                </button>
+                <button
+                  type="button"
+                  className={`view-toggle-btn ${productViewMode === 'table' ? 'active' : ''}`}
+                  onClick={() => setProductViewMode('table')}
+                >
+                  📋 Table View
+                </button>
+              </div>
+            </div>
           </div>
 
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Photo</th>
-                <th>Icon</th>
-                <th>Product Name</th>
-                <th>Category</th>
-                <th>Tag Badge</th>
-                <th>Farmer Benefit</th>
-                <th>Recommended Dose</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+          {filteredProducts.length === 0 ? (
+            <div className="admin-empty-state">
+              <h3>No products found</h3>
+              <p>No products match your current search or category filter.</p>
+              <button
+                type="button"
+                className="btn-add"
+                style={{ padding: '8px 18px', fontSize: '13px' }}
+                onClick={() => { setProductCategoryFilter('All'); setProductSearch(''); }}
+              >
+                Show All {products.length} Products
+              </button>
+            </div>
+          ) : productViewMode === 'cards' ? (
+            /* CARDS GRID VIEW */
+            <div className="admin-products-grid">
               {filteredProducts.map(p => (
-                <tr key={p.id}>
-                  <td>
+                <div
+                  key={p.id}
+                  className={`admin-product-card ${String(p.id) === String(highlightedProductId) ? 'highlighted-product' : ''}`}
+                >
+                  {String(p.id) === String(highlightedProductId) && (
+                    <span className="badge-just-added">✨ Just Added / Updated</span>
+                  )}
+                  <div className="admin-card-img-wrap">
                     {p.imageUrl ? (
-                      <img src={p.imageUrl} alt={p.name} className="table-thumb" onError={(e) => { e.target.style.display = 'none'; }} />
-                    ) : (
-                      <span className="no-img-badge">No Image</span>
-                    )}
-                  </td>
-                  <td><span className="emoji-display">{p.icon || '🌱'}</span></td>
-                  <td><strong>{p.name}</strong></td>
-                  <td>{p.category}</td>
-                  <td>{p.tag ? <span className="perm-badge active">{p.tag}</span> : '-'}</td>
-                  <td>{p.benefit || '-'}</td>
-                  <td style={{ fontSize: '13px' }}>{p.dose || '-'}</td>
-                  <td>
-                    <div className="action-btns">
-                      <button
-                        className="btn-sm btn-edit"
-                        disabled={!hasPermission('update')}
-                        onClick={() => {
-                          setEditingProduct(p);
-                          setProductForm({ ...p, imageUrl: p.imageUrl || '' });
-                          setProductModalOpen(true);
+                      <img
+                        src={formatImageUrl(p.imageUrl)}
+                        alt={p.name}
+                        className="admin-card-img"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const fb = e.currentTarget.parentElement?.querySelector('.admin-card-fallback-img');
+                          if (fb) fb.style.display = 'flex';
                         }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="btn-sm btn-delete"
-                        disabled={!hasPermission('delete')}
-                        onClick={() => handleDeleteProduct(p.id)}
-                      >
-                        Delete
-                      </button>
+                      />
+                    ) : null}
+                    <div className="admin-card-fallback-img" style={{ display: p.imageUrl ? 'none' : 'flex' }}>
+                      <span>{p.icon || '🌱'}</span>
                     </div>
-                  </td>
-                </tr>
+                    <div className="admin-card-floating-emoji">{p.icon || '🌱'}</div>
+                    {p.tag && (
+                      <span className={`admin-card-tag ${p.tag === 'Bestseller' ? 'tag-gold' : p.tag === 'New' ? 'tag-blue' : 'tag-green'}`}>
+                        {p.tag}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="admin-card-body">
+                    <span className="admin-card-cat-pill">{p.category}</span>
+                    <h3 className="admin-card-title">{p.name}</h3>
+                    {p.desc && <p className="admin-card-desc">{p.desc}</p>}
+
+                    <div className="admin-card-specs">
+                      {p.benefit && (
+                        <div className="admin-card-spec-row">
+                          <span className="admin-card-spec-label">Benefit:</span>
+                          <span className="admin-card-spec-val" title={p.benefit}>{p.benefit}</span>
+                        </div>
+                      )}
+                      {p.dose && (
+                        <div className="admin-card-spec-row">
+                          <span className="admin-card-spec-label">Dose:</span>
+                          <span className="admin-card-spec-val" title={p.dose}>{p.dose}</span>
+                        </div>
+                      )}
+                      {p.crops && (
+                        <div className="admin-card-spec-row">
+                          <span className="admin-card-spec-label">Crops:</span>
+                          <span className="admin-card-spec-val" title={p.crops}>{p.crops}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="admin-card-footer">
+                    <button
+                      type="button"
+                      className="btn-sm btn-edit"
+                      disabled={!hasPermission('update')}
+                      onClick={() => {
+                        setEditingProduct(p);
+                        setProductForm({ ...p, imageUrl: p.imageUrl || '' });
+                        setProductImageTab(p.imageUrl && p.imageUrl.startsWith('/uploads') ? 'upload' : 'link');
+                        setProductModalOpen(true);
+                      }}
+                    >
+                      ✏️ Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-sm btn-delete"
+                      disabled={!hasPermission('delete')}
+                      onClick={() => handleDeleteProduct(p.id)}
+                    >
+                      🗑️ Delete
+                    </button>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          ) : (
+            /* TABLE VIEW */
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Photo</th>
+                  <th>Icon</th>
+                  <th>Product Name</th>
+                  <th>Category</th>
+                  <th>Tag Badge</th>
+                  <th>Farmer Benefit</th>
+                  <th>Recommended Dose</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProducts.map(p => (
+                  <tr
+                    key={p.id}
+                    style={{
+                      backgroundColor: String(p.id) === String(highlightedProductId) ? '#f0fdf4' : 'transparent',
+                      transition: 'background-color 0.5s ease'
+                    }}
+                  >
+                    <td>
+                      <div className="table-thumb-wrap">
+                        {p.imageUrl ? (
+                          <img
+                            src={formatImageUrl(p.imageUrl)}
+                            alt={p.name}
+                            className="table-thumb"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              const fb = e.currentTarget.parentElement?.querySelector('.table-thumb-fallback');
+                              if (fb) fb.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div className="table-thumb-fallback" style={{ display: p.imageUrl ? 'none' : 'flex' }}>
+                          <span>{p.icon || '🌱'}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td><span className="emoji-display">{p.icon || '🌱'}</span></td>
+                    <td>
+                      <strong>{p.name}</strong>
+                      {String(p.id) === String(highlightedProductId) && (
+                        <span style={{ marginLeft: '8px', fontSize: '11px', color: '#16a34a', fontWeight: '700' }}>✨ Just Added</span>
+                      )}
+                    </td>
+                    <td>{p.category}</td>
+                    <td>{p.tag ? <span className="perm-badge active">{p.tag}</span> : '-'}</td>
+                    <td>{p.benefit || '-'}</td>
+                    <td style={{ fontSize: '13px' }}>{p.dose || '-'}</td>
+                    <td>
+                      <div className="action-btns">
+                        <button
+                          className="btn-sm btn-edit"
+                          disabled={!hasPermission('update')}
+                          onClick={() => {
+                            setEditingProduct(p);
+                            setProductForm({ ...p, imageUrl: p.imageUrl || '' });
+                            setProductImageTab(p.imageUrl && p.imageUrl.startsWith('/uploads') ? 'upload' : 'link');
+                            setProductModalOpen(true);
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="btn-sm btn-delete"
+                          disabled={!hasPermission('delete')}
+                          onClick={() => handleDeleteProduct(p.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
@@ -2191,14 +2438,91 @@ const Admin = () => {
               </div>
 
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label>Photo Web Link (URL)</label>
-                <input
-                  type="text"
-                  placeholder="https://images.unsplash.com/... or Google Drive link"
-                  value={productForm.imageUrl || ''}
-                  onChange={e => setProductForm({ ...productForm, imageUrl: e.target.value })}
-                />
-                <span className="field-help">Paste photo link to display image in catalog cards.</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                  <label style={{ margin: 0, fontWeight: '700', color: '#1e293b' }}>
+                    🖼️ Product Photo / Image
+                  </label>
+                  <div className="product-image-tab-group">
+                    <button
+                      type="button"
+                      className={`tab-btn-pill ${productImageTab === 'upload' ? 'active' : ''}`}
+                      onClick={() => setProductImageTab('upload')}
+                    >
+                      📁 Upload from Computer
+                    </button>
+                    <button
+                      type="button"
+                      className={`tab-btn-pill ${productImageTab === 'link' ? 'active' : ''}`}
+                      onClick={() => setProductImageTab('link')}
+                    >
+                      🔗 Paste Photo Link
+                    </button>
+                  </div>
+                </div>
+
+                {productImageTab === 'upload' ? (
+                  <div className="product-upload-container">
+                    <label className="product-dropzone-label">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={e => {
+                          if (e.target.files && e.target.files[0]) {
+                            handleProductFileUpload(e.target.files[0]);
+                          }
+                        }}
+                      />
+                      <span className="dropzone-icon">📷</span>
+                      <span className="dropzone-text">
+                        {productImageUploading ? '⏳ Uploading Image to Server...' : 'Click to Select & Upload Photo from Device'}
+                      </span>
+                      <span className="dropzone-sub">Supports JPG, PNG, WebP, GIF (Max 10MB)</span>
+                    </label>
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="https://images.unsplash.com/... or Google Drive link"
+                      value={productForm.imageUrl || ''}
+                      onChange={e => setProductForm({ ...productForm, imageUrl: e.target.value })}
+                    />
+                    <span className="field-help">Paste a direct image link or Google Drive sharing URL.</span>
+                  </div>
+                )}
+
+                {/* Live Image Preview Bar & Clear Action */}
+                {productForm.imageUrl && (
+                  <div className="product-image-preview-bar">
+                    <div className="preview-img-wrap">
+                      <img
+                        src={formatImageUrl(productForm.imageUrl)}
+                        alt="Product preview"
+                        className="preview-img-thumb"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                    <div className="preview-info-text">
+                      <span className="preview-title">Photo Attached</span>
+                      <span className="preview-link-snippet" title={productForm.imageUrl}>
+                        {productForm.imageUrl.startsWith('data:')
+                          ? 'Local uploaded image'
+                          : productForm.imageUrl}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-remove-preview"
+                      onClick={() => setProductForm({ ...productForm, imageUrl: '' })}
+                      title="Remove photo"
+                    >
+                      ✕ Clear Photo
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="form-group">
@@ -2249,6 +2573,46 @@ const Admin = () => {
                   value={productForm.desc || ''}
                   onChange={e => setProductForm({ ...productForm, desc: e.target.value })}
                 />
+              </div>
+
+              {/* LIVE CATALOG CARD PREVIEW IN MODAL */}
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                <label style={{ fontSize: '12px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '700' }}>
+                  Live Card Preview (As Seen by Customers)
+                </label>
+                <div className="modal-preview-card-wrap">
+                  <div className="admin-product-card-preview">
+                    <div className="admin-preview-img-box">
+                      {productForm.imageUrl ? (
+                        <img
+                          src={formatImageUrl(productForm.imageUrl)}
+                          alt={productForm.name || 'Product Preview'}
+                          className="admin-preview-img"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const fb = e.currentTarget.parentElement?.querySelector('.admin-preview-fallback');
+                            if (fb) fb.style.display = 'flex';
+                          }}
+                        />
+                      ) : null}
+                      <div className="admin-preview-fallback" style={{ display: productForm.imageUrl ? 'none' : 'flex' }}>
+                        <span>{productForm.icon || '🌱'}</span>
+                      </div>
+                      <div className="admin-preview-floating-emoji">{productForm.icon || '🌱'}</div>
+                      {productForm.tag && <span className="admin-preview-tag">{productForm.tag}</span>}
+                    </div>
+                    <div className="admin-preview-body">
+                      <span className="admin-preview-cat">{productForm.category || 'Bio Fertilizers'}</span>
+                      <h4 className="admin-preview-title">{productForm.name || 'Product Title'}</h4>
+                      <p className="admin-preview-desc">{productForm.desc || 'Product description will appear here...'}</p>
+                      <div className="admin-preview-meta">
+                        <div><span className="meta-k">Benefit:</span> <strong>{productForm.benefit || 'N/A'}</strong></div>
+                        <div><span className="meta-k">Dose:</span> <strong>{productForm.dose || 'N/A'}</strong></div>
+                        <div><span className="meta-k">Crops:</span> <strong>{productForm.crops || 'N/A'}</strong></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div style={{ gridColumn: 'span 2', display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '12px' }}>

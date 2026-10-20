@@ -23,5 +23,10 @@ export const formatImageUrl = (url) => {
     return `https://lh3.googleusercontent.com/d/${driveIdMatch[1]}`;
   }
 
+  // Pattern 3: Dropbox sharing links
+  if (trimmed.includes('dropbox.com')) {
+    return trimmed.replace('www.dropbox.com', 'dl.dropboxusercontent.com').replace(/[?&]dl=0/, '');
+  }
+
   return trimmed;
 };

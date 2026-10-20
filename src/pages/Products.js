@@ -41,7 +41,7 @@ const Products = () => {
       try {
         const localProds = JSON.parse(localStorage.getItem('achintyah_products') || '[]');
         localProds.forEach(lp => {
-          const idx = list.findIndex(p => p.id === lp.id);
+          const idx = list.findIndex(p => String(p.id) === String(lp.id));
           if (idx !== -1) {
             list[idx] = lp;
           } else {
@@ -132,7 +132,14 @@ const Products = () => {
                         src={formatImageUrl(product.imageUrl)}
                         alt={product.name}
                         className="product-card-img"
-                        onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const parent = e.currentTarget.parentElement;
+                          if (parent) {
+                            const fallback = parent.querySelector('.product-card-img-fallback');
+                            if (fallback) fallback.style.display = 'flex';
+                          }
+                        }}
                       />
                     ) : null}
                     <div className="product-card-img-fallback" style={{ display: product.imageUrl ? 'none' : 'flex' }}>
@@ -188,7 +195,14 @@ const Products = () => {
 
             {selected.imageUrl ? (
               <div className="modal-image-header">
-                <img src={selected.imageUrl} alt={selected.name} className="modal-header-img" />
+                <img
+                  src={formatImageUrl(selected.imageUrl)}
+                  alt={selected.name}
+                  className="modal-header-img"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
                 <span className="modal-floating-emoji">{selected.icon || '🌱'}</span>
               </div>
             ) : (
