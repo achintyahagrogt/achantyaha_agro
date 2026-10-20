@@ -3,10 +3,21 @@ import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { defaultProducts } from '../data/defaultProducts';
 import { formatImageUrl } from '../utils/imageUtils';
+import { DEFAULT_HERO_SLIDES } from './Home';
 import './Admin.css';
 
 const ALL_PERMISSIONS = ['create', 'read', 'update', 'delete', 'manage_users'];
 const EMOJI_PALETTE = ['🌿', '🌊', '🔬', '💧', '🌱', '🛡️', '⚗️', '🌍', '🌻', '🧪', '🌾', '⚡', '🥭', '🍇', '🌽'];
+
+const HERO_IMAGE_PRESETS = [
+  { name: '🌾 Farmer in Field', url: '/hero_farmer_bg.png' },
+  { name: '🌱 Bio-Fertilizer Crops', url: 'https://images.unsplash.com/photo-1592982537447-7440770cbfc9?w=1600&auto=format&fit=crop&q=80' },
+  { name: '🔬 Micronutrients Farm', url: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1600&auto=format&fit=crop&q=80' },
+  { name: '🏡 Modern Greenhouse', url: 'https://images.unsplash.com/photo-1585314062340-f1a5a7c9328d?w=1600&auto=format&fit=crop&q=80' },
+  { name: '🚜 Golden Harvest', url: 'https://images.unsplash.com/photo-1625246333195-78d9c38ad449?w=1600&auto=format&fit=crop&q=80' },
+  { name: '🌿 Soil & Sprout', url: 'https://images.unsplash.com/photo-1530836369250-ef72a3f5cda8?w=1600&auto=format&fit=crop&q=80' }
+];
+
 
 const Admin = () => {
   const { user, token, logout, hasPermission, API_BASE } = useAuth();
@@ -55,8 +66,14 @@ const Admin = () => {
     badgeTxt: "Years of Excellence",
     mainImg: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&auto=format&fit=crop&q=80",
     sideImg1: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=600&auto=format&fit=crop&q=80",
-    sideImg2: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=600&auto=format&fit=crop&q=80"
+    sideImg2: "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=600&auto=format&fit=crop&q=80",
+    heroSlideInterval: 3,
+    heroSlides: DEFAULT_HERO_SLIDES
   });
+
+  const [uploadingSlideIndex, setUploadingSlideIndex] = useState(null);
+  const [adminHeroPreviewIdx, setAdminHeroPreviewIdx] = useState(0);
+
 
   // About Page Form State
   const [aboutForm, setAboutForm] = useState({
@@ -223,14 +240,22 @@ const Admin = () => {
       const res = await fetch(`${API_BASE}/home-content`);
       if (res.ok) {
         const data = await res.json();
-        if (data && data.aboutTitle) {
-          setHomeForm(prev => ({ ...prev, ...data }));
+        if (data) {
+          setHomeForm(prev => ({
+            ...prev,
+            ...data,
+            heroSlides: Array.isArray(data.heroSlides) && data.heroSlides.length > 0
+              ? data.heroSlides
+              : (prev.heroSlides || DEFAULT_HERO_SLIDES),
+            heroSlideInterval: data.heroSlideInterval || prev.heroSlideInterval || 3
+          }));
         }
       }
     } catch (err) {
       console.error('Failed to fetch home content:', err);
     }
   };
+
 
   // Fetch About Content
   const fetchAboutContent = async () => {
@@ -327,7 +352,12 @@ const Admin = () => {
       ...homeForm,
       mainImg: formatImageUrl(homeForm.mainImg),
       sideImg1: formatImageUrl(homeForm.sideImg1),
-      sideImg2: formatImageUrl(homeForm.sideImg2)
+      sideImg2: formatImageUrl(homeForm.sideImg2),
+      heroSlideInterval: Number(homeForm.heroSlideInterval) || 3,
+      heroSlides: (homeForm.heroSlides || []).map(slide => ({
+        ...slide,
+        imageUrl: formatImageUrl(slide.imageUrl)
+      }))
     };
     try {
       localStorage.setItem('achintyah_home_content', JSON.stringify(formattedForm));
@@ -346,6 +376,95 @@ const Admin = () => {
       setMessage(`Error saving home content: ${err.message}`);
     }
   };
+
+  // Hero Slides Management Handlers
+  const handleAddHeroSlide = () => {
+    const newSlide = {
+      id: `slide-${Date.now()}`,
+      imageUrl: 'https://images.unsplash.com/photo-1592982537447-7440770cbfc9?w=1600&auto=format&fit=crop&q=80',
+      tag: "MAHARASHTRA'S GREEN FUTURE",
+      title: 'Nurturing Soil.\nGrowing Tomorrow.',
+      subtitle: 'Achintyah Agrogreentech Pvt Ltd delivers cutting-edge bio-agricultural inputs, organic solutions, and sustainable green technology to empower Indian farmers.',
+      btnText: 'Explore Products',
+      btnLink: '/products',
+      secondaryBtnText: 'About Us',
+      secondaryBtnLink: '/about'
+    };
+    setHomeForm(prev => ({
+      ...prev,
+      heroSlides: [...(prev.heroSlides || []), newSlide]
+    }));
+  };
+
+  const handleDeleteHeroSlide = (index) => {
+    if ((homeForm.heroSlides || []).length <= 1) {
+      alert('You must have at least one hero slide.');
+      return;
+    }
+    const updated = [...(homeForm.heroSlides || [])];
+    updated.splice(index, 1);
+    setHomeForm(prev => ({ ...prev, heroSlides: updated }));
+    if (adminHeroPreviewIdx >= updated.length) {
+      setAdminHeroPreviewIdx(Math.max(0, updated.length - 1));
+    }
+  };
+
+  const handleMoveHeroSlide = (index, direction) => {
+    const slides = [...(homeForm.heroSlides || [])];
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= slides.length) return;
+    const temp = slides[index];
+    slides[index] = slides[targetIndex];
+    slides[targetIndex] = temp;
+    setHomeForm(prev => ({ ...prev, heroSlides: slides }));
+    setAdminHeroPreviewIdx(targetIndex);
+  };
+
+  const handleUpdateHeroSlide = (index, field, value) => {
+    const updated = [...(homeForm.heroSlides || [])];
+    updated[index] = { ...updated[index], [field]: value };
+    setHomeForm(prev => ({ ...prev, heroSlides: updated }));
+  };
+
+  const handleHeroFileUpload = async (index, file) => {
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) {
+      alert('Image file size must be less than 8MB.');
+      return;
+    }
+    setUploadingSlideIndex(index);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const res = await fetch(`${API_BASE}/upload-image`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              imageBase64: reader.result,
+              filename: file.name
+            })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.message || 'Upload failed');
+          handleUpdateHeroSlide(index, 'imageUrl', data.url);
+          setMessage(`✅ Hero slide #${index + 1} image uploaded successfully!`);
+        } catch (err) {
+          setMessage(`Upload failed: ${err.message}`);
+        } finally {
+          setUploadingSlideIndex(null);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      setUploadingSlideIndex(null);
+      setMessage(`Upload error: ${err.message}`);
+    }
+  };
+
 
   const handleAboutSubmit = async (e) => {
     e.preventDefault();
@@ -1080,130 +1199,440 @@ const Admin = () => {
           <div className="card-top-bar">
             <div>
               <h2 className="card-title">Edit Home Page Content</h2>
-              <p className="card-subtitle-plain">Update text titles, description paragraphs, bullet points, and banner photos displayed on the main home page.</p>
+              <p className="card-subtitle-plain">
+                Manage the main hero banner images (rotating every 5 seconds), company mission, bullet highlights, and home page imagery.
+              </p>
             </div>
           </div>
 
-          <form onSubmit={handleHomeSubmit} className="form-grid" style={{ marginTop: '20px' }}>
-            <div className="form-group" style={{ gridColumn: 'span 2' }}>
-              <label>Home Section Main Heading</label>
-              <input
-                type="text"
-                value={homeForm.aboutTitle}
-                onChange={(e) => setHomeForm({ ...homeForm, aboutTitle: e.target.value })}
-                placeholder="e.g. About Achintyah Agrogreentech Pvt. Ltd."
-                required
-              />
-              <span className="field-help">Main headline displayed at the top of the introductory home page section.</span>
-            </div>
+          <form onSubmit={handleHomeSubmit} style={{ marginTop: '20px' }}>
+            {/* SECTION 1: HERO SLIDESHOW MANAGER */}
+            <div className="hero-admin-section">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+                <div>
+                  <h3 style={{ color: 'var(--forest)', fontSize: '18px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>🌄</span> Main Hero Banner Slideshow
+                  </h3>
+                  <p style={{ color: '#64748b', fontSize: '13px', marginTop: '4px' }}>
+                    These slides appear at the top of the homepage and rotate automatically. You can add new slides, change images, upload from your PC, or customize captions.
+                  </p>
+                </div>
 
-            <div className="form-group" style={{ gridColumn: 'span 2' }}>
-              <label>Company Introduction Paragraph</label>
-              <textarea
-                rows="3"
-                value={homeForm.aboutDesc}
-                onChange={(e) => setHomeForm({ ...homeForm, aboutDesc: e.target.value })}
-                placeholder="Description paragraph displayed on home page..."
-                required
-              />
-              <span className="field-help">Main overview paragraph describing your mission to visitors.</span>
-            </div>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={handleAddHeroSlide}
+                  disabled={!hasPermission('update')}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '9px 18px' }}
+                >
+                  ➕ Add Hero Slide
+                </button>
+              </div>
 
-            <div className="form-group">
-              <label>Highlight Bullet #1</label>
-              <input
-                type="text"
-                value={homeForm.check1}
-                onChange={(e) => setHomeForm({ ...homeForm, check1: e.target.value })}
-                placeholder="Quality Assurance"
-              />
-              <span className="field-help">First checkmark highlight point.</span>
-            </div>
+              {/* Toolbar: Rotation interval & Slide Count */}
+              <div className="hero-admin-toolbar">
+                <div className="hero-toolbar-left">
+                  <span className="hero-count-pill">
+                    {(homeForm.heroSlides || []).length} Total Slides
+                  </span>
+                  <label className="hero-interval-control">
+                    ⏱️ Auto-Slide Interval:
+                    <input
+                      type="number"
+                      min="2"
+                      max="30"
+                      className="hero-interval-input"
+                      value={homeForm.heroSlideInterval || 3}
+                      onChange={(e) => setHomeForm({ ...homeForm, heroSlideInterval: Math.max(2, parseInt(e.target.value) || 3) })}
+                    />
+                    <span>seconds</span>
+                  </label>
+                </div>
+                <div style={{ fontSize: '12px', color: '#718096' }}>
+                  ℹ️ Visitor hover pauses the slider automatically
+                </div>
+              </div>
 
-            <div className="form-group">
-              <label>Highlight Bullet #2</label>
-              <input
-                type="text"
-                value={homeForm.check2}
-                onChange={(e) => setHomeForm({ ...homeForm, check2: e.target.value })}
-                placeholder="Timely Delivery"
-              />
-              <span className="field-help">Second checkmark highlight point.</span>
-            </div>
+              {/* Hero Slides List */}
+              {(homeForm.heroSlides || []).map((slide, idx) => (
+                <div key={slide.id || idx} className="hero-slide-admin-card">
+                  {/* Card Header with reordering and deletion */}
+                  <div className="hero-slide-card-header">
+                    <div className="slide-badge-title">
+                      <span className="slide-number-pill">Slide #{idx + 1}</span>
+                      <span style={{ fontSize: '13px', fontWeight: '600', color: '#2d3748' }}>
+                        {slide.tag || "Hero Slide"}
+                      </span>
+                    </div>
 
-            <div className="form-group">
-              <label>Highlight Bullet #3</label>
-              <input
-                type="text"
-                value={homeForm.check3}
-                onChange={(e) => setHomeForm({ ...homeForm, check3: e.target.value })}
-                placeholder="Expert Technical Support"
-              />
-              <span className="field-help">Third checkmark highlight point.</span>
-            </div>
+                    <div className="slide-header-actions">
+                      <button
+                        type="button"
+                        className="btn-sm btn-edit"
+                        onClick={() => handleMoveHeroSlide(idx, -1)}
+                        disabled={idx === 0 || !hasPermission('update')}
+                        title="Move Slide Up"
+                      >
+                        ⬆️ Up
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-sm btn-edit"
+                        onClick={() => handleMoveHeroSlide(idx, 1)}
+                        disabled={idx === (homeForm.heroSlides || []).length - 1 || !hasPermission('update')}
+                        title="Move Slide Down"
+                      >
+                        ⬇️ Down
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-sm btn-delete"
+                        onClick={() => handleDeleteHeroSlide(idx)}
+                        disabled={(homeForm.heroSlides || []).length <= 1 || !hasPermission('delete')}
+                        title="Delete Slide"
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
+                  </div>
 
-            <div className="form-group">
-              <label>Highlight Bullet #4</label>
-              <input
-                type="text"
-                value={homeForm.check4}
-                onChange={(e) => setHomeForm({ ...homeForm, check4: e.target.value })}
-                placeholder="Farmer-Centric Approach"
-              />
-              <span className="field-help">Fourth checkmark highlight point.</span>
-            </div>
+                  {/* Card Body Grid */}
+                  <div className="hero-slide-grid">
+                    {/* Left: Image Preview & Presets & Upload */}
+                    <div className="hero-preview-column">
+                      <div className="hero-preview-widget">
+                        <img
+                          src={formatImageUrl(slide.imageUrl) || '/hero_farmer_bg.png'}
+                          alt={`Hero Slide ${idx + 1} Preview`}
+                          onError={(e) => { e.target.src = '/hero_farmer_bg.png'; }}
+                        />
+                        <div className="hero-preview-overlay">
+                          <span className="preview-tag-badge">
+                            {slide.tag || "MAHARASHTRA'S GREEN FUTURE"}
+                          </span>
+                          <div className="preview-title-text">
+                            {slide.title || "Nurturing Soil.\nGrowing Tomorrow."}
+                          </div>
+                          <span className="preview-btn-pill">
+                            {slide.btnText || "Explore Products"} →
+                          </span>
+                        </div>
+                      </div>
 
-            <div className="form-group">
-              <label>Floating Badge Number / Highlight</label>
-              <input
-                type="text"
-                value={homeForm.badgeNum}
-                onChange={(e) => setHomeForm({ ...homeForm, badgeNum: e.target.value })}
-                placeholder="10+"
-              />
-              <span className="field-help">Short text inside floating badge (e.g. 10+ or 100%).</span>
-            </div>
+                      {/* File upload from computer */}
+                      <div>
+                        <input
+                          type="file"
+                          id={`hero-slide-file-${idx}`}
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              handleHeroFileUpload(idx, e.target.files[0]);
+                            }
+                          }}
+                        />
+                        <label
+                          htmlFor={`hero-slide-file-${idx}`}
+                          className="btn-upload-file-label"
+                        >
+                          {uploadingSlideIndex === idx ? '⏳ Uploading Image...' : '📁 Upload Photo from Computer'}
+                        </label>
+                      </div>
 
-            <div className="form-group">
-              <label>Floating Badge Text</label>
-              <input
-                type="text"
-                value={homeForm.badgeTxt}
-                onChange={(e) => setHomeForm({ ...homeForm, badgeTxt: e.target.value })}
-                placeholder="Years of Excellence"
-              />
-              <span className="field-help">Label text inside floating badge (e.g. Years of Excellence).</span>
-            </div>
+                      {/* Quick Image Presets */}
+                      <div>
+                        <div className="preset-gallery-title">🌾 Quick Agricultural Presets:</div>
+                        <div className="hero-presets-group" style={{ marginTop: '6px' }}>
+                          {HERO_IMAGE_PRESETS.map((preset, pIdx) => (
+                            <button
+                              key={pIdx}
+                              type="button"
+                              className="preset-chip-btn"
+                              onClick={() => handleUpdateHeroSlide(idx, 'imageUrl', preset.url)}
+                              title={`Set slide to ${preset.name}`}
+                            >
+                              {preset.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
 
-            <div className="form-group" style={{ gridColumn: 'span 2' }}>
-              <label>Main Home Banner Photo Link (URL)</label>
-              <input
-                type="text"
-                value={homeForm.mainImg}
-                onChange={(e) => setHomeForm({ ...homeForm, mainImg: e.target.value })}
-                placeholder="Paste photo web address..."
-              />
-              <span className="field-help">Main facility or field photo shown on the home page.</span>
-              {homeForm.mainImg && (
-                <div className="image-preview-box" style={{ marginTop: '10px' }}>
-                  <img src={formatImageUrl(homeForm.mainImg)} alt="Main Banner Preview" className="img-preview" style={{ width: '140px', height: '80px', objectFit: 'cover', borderRadius: '6px' }} />
+                    {/* Right: Slide Text Fields */}
+                    <div className="form-grid" style={{ gap: '14px' }}>
+                      <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                        <label>Slide Image Link (URL or Upload Path)</label>
+                        <input
+                          type="text"
+                          value={slide.imageUrl || ''}
+                          onChange={(e) => handleUpdateHeroSlide(idx, 'imageUrl', e.target.value)}
+                          placeholder="Paste image URL (Unsplash, Google Drive link, or /hero_farmer_bg.png)"
+                          required
+                        />
+                        <span className="field-help">Direct HTTP/HTTPS link, Google Drive sharing link, or local uploaded file path.</span>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Top Badge / Label Text</label>
+                        <input
+                          type="text"
+                          value={slide.tag || ''}
+                          onChange={(e) => handleUpdateHeroSlide(idx, 'tag', e.target.value)}
+                          placeholder="e.g. MAHARASHTRA'S GREEN FUTURE"
+                        />
+                        <span className="field-help">Gold kicker badge tag shown above the main heading.</span>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Main Headline Title</label>
+                        <textarea
+                          rows="2"
+                          value={slide.title || ''}
+                          onChange={(e) => handleUpdateHeroSlide(idx, 'title', e.target.value)}
+                          placeholder="e.g. Nurturing Soil.&#10;Growing Tomorrow."
+                        />
+                        <span className="field-help">Main hero headline (press Enter for line breaks).</span>
+                      </div>
+
+                      <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                        <label>Slide Subtitle / Description</label>
+                        <textarea
+                          rows="2"
+                          value={slide.subtitle || ''}
+                          onChange={(e) => handleUpdateHeroSlide(idx, 'subtitle', e.target.value)}
+                          placeholder="Description paragraph displayed on this slide..."
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label>Primary Button Text</label>
+                        <input
+                          type="text"
+                          value={slide.btnText || ''}
+                          onChange={(e) => handleUpdateHeroSlide(idx, 'btnText', e.target.value)}
+                          placeholder="e.g. Explore Products"
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label>Primary Button Link</label>
+                        <input
+                          type="text"
+                          value={slide.btnLink || ''}
+                          onChange={(e) => handleUpdateHeroSlide(idx, 'btnLink', e.target.value)}
+                          placeholder="e.g. /products"
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label>Secondary Button Text</label>
+                        <input
+                          type="text"
+                          value={slide.secondaryBtnText || ''}
+                          onChange={(e) => handleUpdateHeroSlide(idx, 'secondaryBtnText', e.target.value)}
+                          placeholder="e.g. About Us"
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label>Secondary Button Link</label>
+                        <input
+                          type="text"
+                          value={slide.secondaryBtnLink || ''}
+                          onChange={(e) => handleUpdateHeroSlide(idx, 'secondaryBtnLink', e.target.value)}
+                          placeholder="e.g. /about"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Live Preview Switcher in Admin */}
+              {(homeForm.heroSlides || []).length > 0 && (
+                <div className="hero-live-slider-preview-card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <strong style={{ color: '#1a472a', fontSize: '14px' }}>
+                      👁️ Live Slide Preview Switcher:
+                    </strong>
+                    <span style={{ fontSize: '12px', color: '#718096' }}>
+                      Showing Slide #{adminHeroPreviewIdx + 1} of {(homeForm.heroSlides || []).length}
+                    </span>
+                  </div>
+
+                  <div className="live-preview-nav-tabs">
+                    {(homeForm.heroSlides || []).map((_, tabIdx) => (
+                      <button
+                        key={tabIdx}
+                        type="button"
+                        className={`live-preview-tab-btn ${adminHeroPreviewIdx === tabIdx ? 'active' : ''}`}
+                        onClick={() => setAdminHeroPreviewIdx(tabIdx)}
+                      >
+                        Slide {tabIdx + 1}
+                      </button>
+                    ))}
+                  </div>
+
+                  {homeForm.heroSlides[adminHeroPreviewIdx] && (
+                    <div className="hero-preview-widget" style={{ height: '240px' }}>
+                      <img
+                        src={formatImageUrl(homeForm.heroSlides[adminHeroPreviewIdx].imageUrl) || '/hero_farmer_bg.png'}
+                        alt="Preview"
+                        onError={(e) => { e.target.src = '/hero_farmer_bg.png'; }}
+                      />
+                      <div className="hero-preview-overlay" style={{ padding: '24px' }}>
+                        <span className="preview-tag-badge" style={{ fontSize: '11px' }}>
+                          {homeForm.heroSlides[adminHeroPreviewIdx].tag || "MAHARASHTRA'S GREEN FUTURE"}
+                        </span>
+                        <div className="preview-title-text" style={{ fontSize: '20px' }}>
+                          {homeForm.heroSlides[adminHeroPreviewIdx].title || "Nurturing Soil.\nGrowing Tomorrow."}
+                        </div>
+                        <p style={{ fontSize: '12px', color: '#4a5568', margin: '4px 0 10px', maxWidth: '380px' }}>
+                          {homeForm.heroSlides[adminHeroPreviewIdx].subtitle || "Achintyah Agrogreentech Pvt Ltd delivers cutting-edge bio-agricultural inputs..."}
+                        </p>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <span className="preview-btn-pill" style={{ fontSize: '11px', padding: '5px 14px' }}>
+                            {homeForm.heroSlides[adminHeroPreviewIdx].btnText || "Explore Products"} →
+                          </span>
+                          <span style={{ fontSize: '11px', padding: '4px 12px', borderRadius: '12px', border: '1px solid #0d3b1e', color: '#0d3b1e', fontWeight: '700' }}>
+                            {homeForm.heroSlides[adminHeroPreviewIdx].secondaryBtnText || "About Us"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
-            <div style={{ gridColumn: 'span 2', display: 'flex', gap: '16px', marginTop: '16px' }}>
+            {/* SECTION 2: ABOUT COMPANY (HOME PAGE) */}
+            <div className="hero-admin-section">
+              <h3 style={{ color: 'var(--forest)', fontSize: '18px', fontWeight: '800', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>🌿</span> About Company Section (Home Page)
+              </h3>
+              <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '18px' }}>
+                Update the introduction text, bullet points, and main facility image that appear directly below the products section on the home page.
+              </p>
+
+              <div className="form-grid">
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label>Home Section Main Heading</label>
+                  <input
+                    type="text"
+                    value={homeForm.aboutTitle}
+                    onChange={(e) => setHomeForm({ ...homeForm, aboutTitle: e.target.value })}
+                    placeholder="e.g. About Achintyah Agrogreentech Pvt. Ltd."
+                    required
+                  />
+                  <span className="field-help">Main headline displayed at the top of the introductory home page section.</span>
+                </div>
+
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label>Company Introduction Paragraph</label>
+                  <textarea
+                    rows="3"
+                    value={homeForm.aboutDesc}
+                    onChange={(e) => setHomeForm({ ...homeForm, aboutDesc: e.target.value })}
+                    placeholder="Description paragraph displayed on home page..."
+                    required
+                  />
+                  <span className="field-help">Main overview paragraph describing your mission to visitors.</span>
+                </div>
+
+                <div className="form-group">
+                  <label>Highlight Bullet #1</label>
+                  <input
+                    type="text"
+                    value={homeForm.check1}
+                    onChange={(e) => setHomeForm({ ...homeForm, check1: e.target.value })}
+                    placeholder="Quality Assurance"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Highlight Bullet #2</label>
+                  <input
+                    type="text"
+                    value={homeForm.check2}
+                    onChange={(e) => setHomeForm({ ...homeForm, check2: e.target.value })}
+                    placeholder="Timely Delivery"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Highlight Bullet #3</label>
+                  <input
+                    type="text"
+                    value={homeForm.check3}
+                    onChange={(e) => setHomeForm({ ...homeForm, check3: e.target.value })}
+                    placeholder="Expert Technical Support"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Highlight Bullet #4</label>
+                  <input
+                    type="text"
+                    value={homeForm.check4}
+                    onChange={(e) => setHomeForm({ ...homeForm, check4: e.target.value })}
+                    placeholder="Farmer-Centric Approach"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Floating Badge Number / Highlight</label>
+                  <input
+                    type="text"
+                    value={homeForm.badgeNum}
+                    onChange={(e) => setHomeForm({ ...homeForm, badgeNum: e.target.value })}
+                    placeholder="10+"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Floating Badge Text</label>
+                  <input
+                    type="text"
+                    value={homeForm.badgeTxt}
+                    onChange={(e) => setHomeForm({ ...homeForm, badgeTxt: e.target.value })}
+                    placeholder="Years of Excellence"
+                  />
+                </div>
+
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label>About Company Facility Photo Link (URL)</label>
+                  <input
+                    type="text"
+                    value={homeForm.mainImg}
+                    onChange={(e) => setHomeForm({ ...homeForm, mainImg: e.target.value })}
+                    placeholder="Paste photo web address..."
+                  />
+                  <span className="field-help">Facility or field photo shown in the About section on the home page.</span>
+                  {homeForm.mainImg && (
+                    <div className="image-preview-box" style={{ marginTop: '10px' }}>
+                      <img src={formatImageUrl(homeForm.mainImg)} alt="About Company Facility Preview" className="img-preview" style={{ width: '140px', height: '80px', objectFit: 'cover', borderRadius: '6px' }} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* SUBMIT BUTTON */}
+            <div style={{ display: 'flex', gap: '16px', marginTop: '20px' }}>
               <button
                 type="submit"
                 className="btn-primary"
                 disabled={!hasPermission('update')}
-                style={{ padding: '12px 28px', fontSize: '15px' }}
+                style={{ padding: '14px 34px', fontSize: '16px', fontWeight: '700' }}
               >
-                💾 Save Home Page Content
+                💾 Save All Home Page Content
               </button>
             </div>
           </form>
         </div>
       )}
+
 
       {/* 4. EDIT ABOUT US PAGE TAB */}
       {activeTab === 'aboutContent' && (

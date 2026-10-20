@@ -26,6 +26,10 @@ app.use(cors(corsOrigin ? { origin: corsOrigin } : {}));
 // Bound request body size to 100kb
 app.use(express.json({ limit: '100kb' }));
 
+// Static uploads directory serving
+app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
+
+
 // Rate Limiters
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -352,6 +356,43 @@ app.put('/api/home-content', authenticateToken, requirePermission('update'), (re
   setHomeContent(updatedContent);
   res.json({ message: 'Homepage content updated successfully', homeContent: updatedContent });
 });
+
+// Image Upload Endpoint for Admin Panel (supports base64 upload up to 10MB)
+app.post('/api/upload-image', authenticateToken, requirePermission('update'), express.json({ limit: '10mb' }), (req, res) => {
+  try {
+    const { imageBase64, filename } = req.body;
+    if (!imageBase64) {
+      return res.status(400).json({ message: 'No image data provided' });
+    }
+
+    const matches = imageBase64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    let buffer;
+    let ext = 'jpg';
+    if (matches && matches.length === 3) {
+      const mime = matches[1].toLowerCase();
+      if (mime.includes('png')) ext = 'png';
+      else if (mime.includes('webp')) ext = 'webp';
+      else if (mime.includes('gif')) ext = 'gif';
+      else if (mime.includes('jpeg') || mime.includes('jpg')) ext = 'jpg';
+      buffer = Buffer.from(matches[2], 'base64');
+    } else {
+      buffer = Buffer.from(imageBase64, 'base64');
+    }
+
+    const cleanFilename = (filename || 'hero_slide').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 30);
+    const safeName = `${cleanFilename}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}.${ext}`;
+    const uploadDir = path.join(__dirname, '../public/uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    fs.writeFileSync(path.join(uploadDir, safeName), buffer);
+    res.json({ url: `/uploads/${safeName}` });
+  } catch (err) {
+    console.error('Image upload error:', err);
+    res.status(500).json({ message: 'Failed to process image upload' });
+  }
+});
+
 
 // About Us & Registered Office Content Management Endpoints
 app.get('/api/about-content', (req, res) => {

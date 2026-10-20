@@ -216,7 +216,54 @@
     "badgeTxt": "Years of Excellence",
     "mainImg": "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&auto=format&fit=crop&q=80",
     "sideImg1": "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=600&auto=format&fit=crop&q=80",
-    "sideImg2": "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=600&auto=format&fit=crop&q=80"
+    "sideImg2": "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=600&auto=format&fit=crop&q=80",
+    "heroSlideInterval": 3,
+    "heroSlides": [
+      {
+        "id": "slide-1",
+        "imageUrl": "/hero_farmer_bg.png",
+        "tag": "MAHARASHTRA'S GREEN FUTURE",
+        "title": "Nurturing Soil.\nGrowing Tomorrow.",
+        "subtitle": "Achintyah Agrogreentech Pvt Ltd delivers cutting-edge bio-agricultural inputs, organic solutions, and sustainable green technology to empower Indian farmers.",
+        "btnText": "Explore Products",
+        "btnLink": "/products",
+        "secondaryBtnText": "About Us",
+        "secondaryBtnLink": "/about"
+      },
+      {
+        "id": "slide-2",
+        "imageUrl": "https://images.unsplash.com/photo-1592982537447-7440770cbfc9?w=1600&auto=format&fit=crop&q=80",
+        "tag": "100% ORGANIC & SAFE BIO-INPUTS",
+        "title": "Advanced Bio-Fertilizers.\nMaximum Soil Vitality.",
+        "subtitle": "Multi-strain bio-inoculants and organic nutrients engineered to restore depleted soil microbiomes, enhance root growth, and maximize yield potential.",
+        "btnText": "View Bio Fertilizers",
+        "btnLink": "/products",
+        "secondaryBtnText": "Our Services",
+        "secondaryBtnLink": "/services"
+      },
+      {
+        "id": "slide-3",
+        "imageUrl": "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1600&auto=format&fit=crop&q=80",
+        "tag": "SCIENTIFICALLY FORMULATED",
+        "title": "High-Purity Micronutrients.\nRapid Crop Absorption.",
+        "subtitle": "Chelated micronutrient compounds and specialized water-soluble blends that prevent deficiencies and dramatically boost crop quality.",
+        "btnText": "Explore Micronutrients",
+        "btnLink": "/products",
+        "secondaryBtnText": "Contact Advisory",
+        "secondaryBtnLink": "/contact"
+      },
+      {
+        "id": "slide-4",
+        "imageUrl": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?w=1600&auto=format&fit=crop&q=80",
+        "tag": "FARMER-CENTRIC INNOVATION",
+        "title": "Sustainable Agriculture.\nProsperous Tomorrow.",
+        "subtitle": "Partnering with progressive farmers, dealers, and FPOs across India with proven agronomic field guidance and premium agricultural formulations.",
+        "btnText": "Partner With Us",
+        "btnLink": "/contact",
+        "secondaryBtnText": "Learn About Us",
+        "secondaryBtnLink": "/about"
+      }
+    ]
   },
   "aboutContent": {
     "officeTitle": "Achintyah Agrogreentech Pvt. Ltd.",
