@@ -171,6 +171,18 @@
       "benefit": "Prevents damping off & wilt",
       "dose": "1–2 kg/acre (soil drench)",
       "crops": "Vegetables, Pulses"
+    },
+    {
+      "id": 13,
+      "name": "ABCD",
+      "category": "Bio Fertilizers",
+      "icon": "🌿",
+      "imageUrl": "https://www.thrivelot.com/resources/5-crop-rotation-tips-to-prevent-plant-diseases",
+      "tag": "",
+      "desc": "blahdhusniucnoncoieivcjioernvcen",
+      "benefit": "Improves this this this",
+      "dose": "",
+      "crops": "alll"
     }
   ],
   "inquiries": [
@@ -344,28 +356,48 @@
         "icon": "🌾",
         "title": "Crop Nutrition Advisory",
         "desc": "Customized crop nutrition programs based on soil test reports, crop variety, water quality, and target yield.",
-        "features": ["Soil & water analysis interpretation", "Crop-stage nutrition scheduling", "Deficiency correction", "Yield improvement strategy"]
+        "features": [
+          "Soil & water analysis interpretation",
+          "Crop-stage nutrition scheduling",
+          "Deficiency correction",
+          "Yield improvement strategy"
+        ]
       },
       {
         "id": 2,
         "icon": "🔬",
         "title": "Product Technical Support",
         "desc": "Technical guidance on product selection, dose calibration, compatibility testing, and application methods.",
-        "features": ["Dose & dilution guidance", "Spray schedule planning", "Compatibility charts", "Field trial support"]
+        "features": [
+          "Dose & dilution guidance",
+          "Spray schedule planning",
+          "Compatibility charts",
+          "Field trial support"
+        ]
       },
       {
         "id": 3,
         "icon": "🚜",
         "title": "Dealer & Distributor Support",
         "desc": "Partnership programs with agri-dealers, distributors, and FPOs across India with preferential pricing.",
-        "features": ["Dealer training programs", "Promotional support", "Demo trial kits", "Bulk order discounts"]
+        "features": [
+          "Dealer training programs",
+          "Promotional support",
+          "Demo trial kits",
+          "Bulk order discounts"
+        ]
       },
       {
         "id": 4,
         "icon": "📊",
         "title": "Farm-to-Market Consulting",
         "desc": "Helping farmers plan production to meet market quality requirements, residue-free protocols, and export standards.",
-        "features": ["Residue-free farming protocol", "GlobalGAP support", "Export quality planning", "Market linkage guidance"]
+        "features": [
+          "Residue-free farming protocol",
+          "GlobalGAP support",
+          "Export quality planning",
+          "Market linkage guidance"
+        ]
       }
     ]
   },
