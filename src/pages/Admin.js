@@ -137,10 +137,10 @@ const Admin = () => {
 
   // Contact Info Form State
   const [contactForm, setContactForm] = useState({
-    phonePrimary: "+91 98765 43210",
-    phoneSecondary: "+91 98765 43211",
+    phonePrimary: "+91 70392 06369",
+    phoneSecondary: "",
     emailPrimary: "info@achintyah.com",
-    emailSupport: "support@achintyah.com",
+    emailSupport: "",
     officeAddress: "204, Mauli CHS, Plot No. D-22,\nSector 20, Nerul, Navi Mumbai,\nMaharashtra, India - 400706",
     workingHours: "Monday – Saturday: 9:00 AM – 6:30 PM (Sunday Closed)",
     mapEmbedUrl: "https://maps.google.com/?q=Nerul+Navi+Mumbai"
@@ -289,12 +289,27 @@ const Admin = () => {
 
   // Fetch Contact Content
   const fetchContactContent = async () => {
+    // 1. Immediately read from localStorage if present
+    try {
+      const local = localStorage.getItem('achintyah_contact_content');
+      if (local) {
+        const parsed = JSON.parse(local);
+        if (parsed && typeof parsed === 'object') {
+          setContactForm(prev => ({ ...prev, ...parsed }));
+        }
+      }
+    } catch (e) {}
+
+    // 2. Fetch latest from API
     try {
       const res = await fetch(`${API_BASE}/contact-content`);
       if (res.ok) {
         const data = await res.json();
-        if (data && (data.phonePrimary || data.officeAddress)) {
+        if (data && typeof data === 'object') {
           setContactForm(prev => ({ ...prev, ...data }));
+          try {
+            localStorage.setItem('achintyah_contact_content', JSON.stringify(data));
+          } catch (e) {}
         }
       }
     } catch (err) {
@@ -518,6 +533,20 @@ const Admin = () => {
     setMessage('');
     try {
       localStorage.setItem('achintyah_contact_content', JSON.stringify(contactForm));
+
+      // Also synchronize officeAddress with aboutForm & achintyah_about_content
+      if (contactForm.officeAddress) {
+        setAboutForm(prev => ({ ...prev, officeAddress: contactForm.officeAddress }));
+        try {
+          const currentAbout = JSON.parse(localStorage.getItem('achintyah_about_content') || '{}');
+          currentAbout.officeAddress = contactForm.officeAddress;
+          localStorage.setItem('achintyah_about_content', JSON.stringify(currentAbout));
+        } catch (e) {}
+      }
+
+      // Notify any active components across the app immediately (Footer, Contact, About)
+      window.dispatchEvent(new Event('achintyah_contact_updated'));
+
       const res = await fetch(`${API_BASE}/contact-content`, {
         method: 'PUT',
         headers: {
@@ -530,7 +559,7 @@ const Admin = () => {
       if (!res.ok) throw new Error(data.message);
       setMessage('✅ Contact details saved successfully!');
     } catch (err) {
-      setMessage(`Error saving contact details: ${err.message}`);
+      setMessage(`Contact details saved locally. (Server notice: ${err.message})`);
     }
   };
 
@@ -884,7 +913,13 @@ const Admin = () => {
               if (parsed.data.homeContent) setHomeForm(parsed.data.homeContent);
               if (parsed.data.aboutContent) setAboutForm(parsed.data.aboutContent);
               if (parsed.data.servicesContent) setServicesForm(parsed.data.servicesContent);
-              if (parsed.data.contactContent) setContactForm(parsed.data.contactContent);
+              if (parsed.data.contactContent) {
+                setContactForm(parsed.data.contactContent);
+                try {
+                  localStorage.setItem('achintyah_contact_content', JSON.stringify(parsed.data.contactContent));
+                  window.dispatchEvent(new Event('achintyah_contact_updated'));
+                } catch (e) {}
+              }
               setMessage('✅ Backup file imported and applied successfully!');
             }
           } else {

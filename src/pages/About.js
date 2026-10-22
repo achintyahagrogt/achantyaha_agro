@@ -23,7 +23,18 @@ const DEFAULT_ABOUT_CONTENT = {
 };
 
 const About = () => {
-  const [content, setContent] = useState(DEFAULT_ABOUT_CONTENT);
+  const [content, setContent] = useState(() => {
+    try {
+      const localAbout = JSON.parse(localStorage.getItem('achintyah_about_content') || '{}');
+      const localContact = JSON.parse(localStorage.getItem('achintyah_contact_content') || '{}');
+      return {
+        ...DEFAULT_ABOUT_CONTENT,
+        ...localAbout,
+        officeAddress: localContact.officeAddress || localAbout.officeAddress || DEFAULT_ABOUT_CONTENT.officeAddress
+      };
+    } catch (e) {}
+    return DEFAULT_ABOUT_CONTENT;
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -38,15 +49,49 @@ const About = () => {
           const data = await res.json();
           if (isMounted && data && (data.officeTitle || data.certifications)) {
             setContent(prev => ({ ...prev, ...data }));
+            try {
+              localStorage.setItem('achintyah_about_content', JSON.stringify(data));
+            } catch (e) {}
           }
         }
       } catch (err) {
-        // Quietly failover to DEFAULT_ABOUT_CONTENT
+        // Quietly failover to DEFAULT_ABOUT_CONTENT or localStorage
       }
+
+      // Also check contact-content for the latest office address
+      try {
+        const resContact = await fetch(`${API_BASE}/api/contact-content`);
+        if (resContact.ok) {
+          const contactData = await resContact.json();
+          if (isMounted && contactData && contactData.officeAddress) {
+            setContent(prev => ({ ...prev, officeAddress: contactData.officeAddress }));
+          }
+        }
+      } catch (err) {}
     };
 
     fetchAboutContent();
-    return () => { isMounted = false; };
+
+    const handleUpdate = () => {
+      try {
+        const localAbout = JSON.parse(localStorage.getItem('achintyah_about_content') || '{}');
+        const localContact = JSON.parse(localStorage.getItem('achintyah_contact_content') || '{}');
+        setContent(prev => ({
+          ...prev,
+          ...localAbout,
+          officeAddress: localContact.officeAddress || localAbout.officeAddress || prev.officeAddress
+        }));
+      } catch (e) {}
+    };
+
+    window.addEventListener('achintyah_contact_updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('achintyah_contact_updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
   }, []);
 
   return (

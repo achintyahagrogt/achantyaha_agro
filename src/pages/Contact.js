@@ -10,10 +10,10 @@ const Contact = () => {
   const [apiError, setApiError] = useState('');
   const [officeAddress, setOfficeAddress] = useState("204, Mauli CHS, Plot No. D-22,\nSector 20, Nerul, Navi Mumbai,\nMaharashtra - 400706");
   const [contactDetails, setContactDetails] = useState({
-    phonePrimary: "+91 98765 43210",
-    phoneSecondary: "+91 98765 43211",
+    phonePrimary: "+91 70392 06369",
+    phoneSecondary: "",
     emailPrimary: "info@achintyah.com",
-    emailSupport: "support@achintyah.com",
+    emailSupport: "",
     workingHours: "Monday – Saturday: 9:00 AM – 6:30 PM (Sunday Closed)",
     mapEmbedUrl: "https://maps.google.com/?q=Nerul+Navi+Mumbai"
   });
@@ -24,6 +24,16 @@ const Contact = () => {
       ? 'http://localhost:5001' 
       : '';
 
+    // 1. Immediately hydrate from localStorage if available
+    try {
+      const localContact = JSON.parse(localStorage.getItem('achintyah_contact_content') || '{}');
+      if (localContact && Object.keys(localContact).length > 0) {
+        setContactDetails(prev => ({ ...prev, ...localContact }));
+        if (localContact.officeAddress) setOfficeAddress(localContact.officeAddress);
+      }
+    } catch (e) {}
+
+    // 2. Fetch fresh content from backend API
     const fetchContactAndAboutContent = async () => {
       try {
         const resAbout = await fetch(`${apiHost}/api/about-content`);
@@ -39,18 +49,40 @@ const Contact = () => {
         const resContact = await fetch(`${apiHost}/api/contact-content`);
         if (resContact.ok) {
           const dataContact = await resContact.json();
-          if (isMounted && dataContact) {
+          if (isMounted && dataContact && typeof dataContact === 'object') {
             setContactDetails(prev => ({ ...prev, ...dataContact }));
             if (dataContact.officeAddress) {
               setOfficeAddress(dataContact.officeAddress);
             }
+            try {
+              localStorage.setItem('achintyah_contact_content', JSON.stringify(dataContact));
+            } catch (e) {}
           }
         }
       } catch (err) {}
     };
 
     fetchContactAndAboutContent();
-    return () => { isMounted = false; };
+
+    // 3. Listen for immediate admin updates
+    const handleUpdate = () => {
+      try {
+        const localContact = JSON.parse(localStorage.getItem('achintyah_contact_content') || '{}');
+        if (localContact && Object.keys(localContact).length > 0) {
+          setContactDetails(prev => ({ ...prev, ...localContact }));
+          if (localContact.officeAddress) setOfficeAddress(localContact.officeAddress);
+        }
+      } catch (e) {}
+    };
+
+    window.addEventListener('achintyah_contact_updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('achintyah_contact_updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
   }, []);
 
   const validate = () => {
@@ -168,7 +200,7 @@ const Contact = () => {
                   <div className="ci-icon">📞</div>
                   <div>
                     <strong>Phone / WhatsApp</strong>
-                    <span>{contactDetails.phonePrimary || "+91 98765 43210"}</span>
+                    <span>{contactDetails.phonePrimary || "+91 70392 06369"}</span>
                     {contactDetails.phoneSecondary && <span>{contactDetails.phoneSecondary}</span>}
                   </div>
                 </div>

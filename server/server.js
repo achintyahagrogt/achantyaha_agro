@@ -450,6 +450,18 @@ app.put('/api/contact-content', authenticateToken, requirePermission('update'), 
   }
 
   setContactContent(updatedContent);
+
+  // Keep officeAddress in sync with aboutContent if provided
+  if (updatedContent.officeAddress) {
+    try {
+      const about = getAboutContent() || {};
+      about.officeAddress = updatedContent.officeAddress;
+      setAboutContent(about);
+    } catch (err) {
+      console.error('Failed to sync officeAddress to about content:', err.message);
+    }
+  }
+
   res.json({ message: 'Contact details updated successfully', contactContent: updatedContent });
 });
 

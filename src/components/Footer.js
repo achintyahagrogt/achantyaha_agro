@@ -1,12 +1,86 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import logo from '../assets/logo.png';
 import './Footer.css';
 
+const DEFAULT_CONTACT = {
+  officeAddress: "204, Mauli CHS, Plot No. D-22,\nSector 20, Nerul, Navi Mumbai, Maharashtra - 400706",
+  phonePrimary: "+91 70392 06369",
+  emailPrimary: "info@achintyah.com"
+};
+
 const Footer = () => {
   const { t } = useLanguage();
   const location = useLocation();
+
+  const [contactInfo, setContactInfo] = useState(() => {
+    try {
+      const saved = localStorage.getItem('achintyah_contact_content');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          officeAddress: parsed.officeAddress || DEFAULT_CONTACT.officeAddress,
+          phonePrimary: parsed.phonePrimary || DEFAULT_CONTACT.phonePrimary,
+          emailPrimary: parsed.emailPrimary || DEFAULT_CONTACT.emailPrimary
+        };
+      }
+    } catch (e) {}
+    return DEFAULT_CONTACT;
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    const apiHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+      ? 'http://localhost:5001' 
+      : '';
+
+    const loadContact = async () => {
+      try {
+        const res = await fetch(`${apiHost}/api/contact-content`);
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data && typeof data === 'object') {
+            setContactInfo(prev => ({
+              officeAddress: data.officeAddress || prev.officeAddress,
+              phonePrimary: data.phonePrimary || prev.phonePrimary,
+              emailPrimary: data.emailPrimary || prev.emailPrimary
+            }));
+            try {
+              localStorage.setItem('achintyah_contact_content', JSON.stringify(data));
+            } catch (e) {}
+          }
+        }
+      } catch (err) {
+        // Fallback already loaded from localStorage
+      }
+    };
+
+    loadContact();
+
+    const handleUpdate = () => {
+      try {
+        const saved = localStorage.getItem('achintyah_contact_content');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setContactInfo(prev => ({
+            officeAddress: parsed.officeAddress || prev.officeAddress,
+            phonePrimary: parsed.phonePrimary || prev.phonePrimary,
+            emailPrimary: parsed.emailPrimary || prev.emailPrimary
+          }));
+        }
+      } catch (e) {}
+    };
+
+    window.addEventListener('achintyah_contact_updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('achintyah_contact_updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
+  }, []);
 
   if (location.pathname === '/admin') {
     return null;
@@ -71,21 +145,29 @@ const Footer = () => {
                 <span className="contact-icon">📍</span>
                 <div>
                   <strong>Registered Office</strong>
-                  <p>204, Mauli CHS, Plot No. D-22,</p><p>Sector 20, Nerul, Navi Mumbai, Maharashtra - 400706</p>
+                  <p style={{ whiteSpace: 'pre-line' }}>{contactInfo.officeAddress || DEFAULT_CONTACT.officeAddress}</p>
                 </div>
               </div>
               <div className="footer-contact-item">
                 <span className="contact-icon">📞</span>
                 <div>
                   <strong>Phone</strong>
-                  <p>+91 70392 06369</p>
+                  <p>
+                    <a href={`tel:${(contactInfo.phonePrimary || DEFAULT_CONTACT.phonePrimary).replace(/[^0-9+]/g, '')}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                      {contactInfo.phonePrimary || DEFAULT_CONTACT.phonePrimary}
+                    </a>
+                  </p>
                 </div>
               </div>
               <div className="footer-contact-item">
                 <span className="contact-icon">✉️</span>
                 <div>
                   <strong>Email</strong>
-                  <p>info@achintyah.com</p>
+                  <p>
+                    <a href={`mailto:${contactInfo.emailPrimary || DEFAULT_CONTACT.emailPrimary}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                      {contactInfo.emailPrimary || DEFAULT_CONTACT.emailPrimary}
+                    </a>
+                  </p>
                 </div>
               </div>
             </div>
