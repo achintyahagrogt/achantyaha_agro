@@ -15,26 +15,46 @@ const LanguageSelector = () => {
   const handleLanguageChange = (langCode) => {
     changeLanguage(langCode);
 
-    // 1. Set Google Translate Cookie if widget enabled
-    document.cookie = `googtrans=/en/${langCode}; path=/; domain=${window.location.hostname}`;
-    document.cookie = `googtrans=/en/${langCode}; path=/;`;
+    const hostname = window.location.hostname;
 
-    // 2. Trigger Google Translate combo element if available
+    // 1. Properly set or clear Google Translate cookie
+    if (langCode === 'en') {
+      document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${hostname};`;
+      if (hostname.includes('.')) {
+        document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.${hostname};`;
+      }
+    } else {
+      const cookieVal = `/en/${langCode}`;
+      document.cookie = `googtrans=${cookieVal}; path=/;`;
+      document.cookie = `googtrans=${cookieVal}; path=/; domain=${hostname};`;
+      if (hostname.includes('.')) {
+        document.cookie = `googtrans=${cookieVal}; path=/; domain=.${hostname};`;
+      }
+    }
+
+    // 2. Trigger Google Translate combo element if present in DOM
     const selectElem = document.querySelector('.goog-te-combo');
     if (selectElem) {
       selectElem.value = langCode;
-      selectElem.dispatchEvent(new Event('change'));
+      selectElem.dispatchEvent(new Event('change', { bubbles: true }));
     }
+
+    // 3. Smooth reload to ensure full, clean translation without React DOM conflicts
+    setTimeout(() => {
+      window.location.reload();
+    }, 150);
   };
 
   return (
     <div className="language-selector" title="Language / भाषा">
       <div className="lang-dropdown-btn">
-        <span>🌐</span>
+        <span aria-hidden="true">🌐</span>
         <select
           className="lang-select-menu"
           value={language}
           onChange={(e) => handleLanguageChange(e.target.value)}
+          aria-label="Select website language"
         >
           {LANGUAGES.map((lang) => (
             <option key={lang.code} value={lang.code}>
@@ -42,7 +62,7 @@ const LanguageSelector = () => {
             </option>
           ))}
         </select>
-        <span className="lang-arrow">▼</span>
+        <span className="lang-arrow" aria-hidden="true">▼</span>
       </div>
     </div>
   );

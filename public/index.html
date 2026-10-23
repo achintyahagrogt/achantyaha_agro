@@ -15,24 +15,63 @@
     
     <!-- Google Translate API for full-page translation -->
     <script type="text/javascript">
+      // Sync Google Translate cookie with saved language preference before translate script runs
+      try {
+        var savedLang = localStorage.getItem('achintyah_lang');
+        var hostname = window.location.hostname;
+        if (savedLang && savedLang !== 'en') {
+          var val = '/en/' + savedLang;
+          document.cookie = 'googtrans=' + val + '; path=/;';
+          document.cookie = 'googtrans=' + val + '; path=/; domain=' + hostname + ';';
+          if (hostname.includes('.')) {
+            document.cookie = 'googtrans=' + val + '; path=/; domain=.' + hostname + ';';
+          }
+        }
+      } catch (e) {}
+
       function googleTranslateElementInit() {
-        new google.translate.TranslateElement({
-          pageLanguage: 'en',
-          includedLanguages: 'en,mr,hi,gu',
-          autoDisplay: false
-        }, 'google_translate_element');
+        if (window.google && window.google.translate) {
+          new window.google.translate.TranslateElement({
+            pageLanguage: 'en',
+            includedLanguages: 'en,mr,hi,gu',
+            autoDisplay: false
+          }, 'google_translate_element');
+        }
       }
     </script>
-    <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+    <script type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
     <style>
-      /* Hide Google Translate top banner and widget frame */
-      .goog-te-banner-frame, .skiptranslate, .goog-te-balloon-frame { display: none !important; }
-      body { top: 0px !important; }
+      /* Hide Google Translate top banner, tooltip balloons, and highlight frames */
+      .goog-te-banner-frame,
+      iframe.goog-te-banner-frame,
+      .goog-te-balloon-frame,
+      #goog-gt-tt,
+      .goog-te-spinner-pos {
+        display: none !important;
+      }
+      body {
+        top: 0px !important;
+        position: static !important;
+      }
+      .goog-text-highlight {
+        background: transparent !important;
+        box-shadow: none !important;
+      }
+      #google_translate_element {
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        opacity: 0;
+        pointer-events: none;
+      }
     </style>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="google_translate_element" style="display:none;"></div>
+    <div id="google_translate_element"></div>
     <div id="root"></div>
   </body>
 </html>

@@ -148,31 +148,42 @@
   animation: fadeIn 0.25s ease;
 }
 
-/* Hamburger */
+/* Hamburger - 3 Lines Menu Button */
 .hamburger {
   display: none;
   flex-direction: column;
+  justify-content: center;
+  align-items: center;
   gap: 5px;
-  background: none;
-  border: none;
+  background: rgba(13, 59, 30, 0.05);
+  border: 1px solid rgba(13, 59, 30, 0.12);
   cursor: pointer;
-  padding: 6px;
-  border-radius: 8px;
+  padding: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
   touch-action: manipulation;
+  transition: all 0.25s ease;
+}
+
+.hamburger:hover,
+.hamburger:active {
+  background: rgba(13, 59, 30, 0.12);
+  border-color: rgba(13, 59, 30, 0.25);
 }
 
 .hamburger span {
   display: block;
-  width: 24px;
-  height: 2px;
+  width: 22px;
+  height: 2.2px;
   background: var(--forest);
   border-radius: 2px;
   transition: all 0.3s ease;
 }
 
-.hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.hamburger.open span:nth-child(1) { transform: translateY(7.2px) rotate(45deg); }
 .hamburger.open span:nth-child(2) { opacity: 0; }
-.hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+.hamburger.open span:nth-child(3) { transform: translateY(-7.2px) rotate(-45deg); }
 
 @media (max-width: 900px) {
   .nav-actions-mobile { display: flex; }

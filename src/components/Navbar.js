@@ -81,13 +81,11 @@ const Navbar = () => {
         </ul>
 
         <div className="nav-actions-mobile">
-          <div className="nav-mobile-lang-wrap">
-            <LanguageSelector />
-          </div>
           <button 
             className={`hamburger ${menuOpen ? 'open' : ''}`}
             onClick={() => setMenuOpen(!menuOpen)}
-            aria-label="Toggle menu"
+            aria-label="Toggle navigation menu"
+            title="Menu"
           >
             <span></span>
             <span></span>
