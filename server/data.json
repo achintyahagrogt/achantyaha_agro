@@ -183,6 +183,30 @@
       "benefit": "this this that that",
       "dose": "3-5kg/acer",
       "crops": "Fruits"
+    },
+    {
+      "id": 14,
+      "name": "TEST NEW",
+      "category": "TEST",
+      "icon": "🌿",
+      "imageUrl": "/uploads/L_jpg_1792698892071_s2t8.jpg",
+      "tag": "Organic",
+      "desc": "THAT THAT THAT",
+      "benefit": "THIS THIS THIS",
+      "dose": "6-7kg/acer",
+      "crops": "All"
+    },
+    {
+      "id": 15,
+      "name": "TEST 2",
+      "category": "TEST 2",
+      "icon": "🌽",
+      "imageUrl": "/uploads/Spidy_jpg_1792733821248_50es.jpg",
+      "tag": "New",
+      "desc": "dsnj dj jdj djc",
+      "benefit": "dnhdfhnhdnf",
+      "dose": "2-3kg/acer",
+      "crops": "all"
     }
   ],
   "inquiries": [

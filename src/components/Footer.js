@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
+import { getAllCategories } from '../utils/categoryUtils';
 import logo from '../assets/logo.png';
 import './Footer.css';
 
@@ -13,6 +14,20 @@ const DEFAULT_CONTACT = {
 const Footer = () => {
   const { t } = useLanguage();
   const location = useLocation();
+
+  const [footerCategories, setFooterCategories] = useState(() => getAllCategories());
+
+  useEffect(() => {
+    const handleCatUpdate = () => {
+      setFooterCategories(getAllCategories());
+    };
+    window.addEventListener('achintyah_categories_updated', handleCatUpdate);
+    window.addEventListener('storage', handleCatUpdate);
+    return () => {
+      window.removeEventListener('achintyah_categories_updated', handleCatUpdate);
+      window.removeEventListener('storage', handleCatUpdate);
+    };
+  }, []);
 
   const [contactInfo, setContactInfo] = useState(() => {
     try {
@@ -130,11 +145,18 @@ const Footer = () => {
           <div className="footer-col">
             <h4>{t('products')}</h4>
             <ul>
-              <li><Link to="/products">{t('catBioFertilizers')}</Link></li>
-              <li><Link to="/products">{t('catMicronutrients')}</Link></li>
-              <li><Link to="/products">{t('catWaterSoluble')}</Link></li>
-              <li><Link to="/products">{t('catGrowthRegulators')}</Link></li>
-              <li><Link to="/products">{t('catOrganicInputs')}</Link></li>
+              {footerCategories.slice(0, 5).map(cat => (
+                <li key={cat}>
+                  <Link to={`/products?category=${encodeURIComponent(cat)}`}>
+                    {cat}
+                  </Link>
+                </li>
+              ))}
+              <li className="footer-more-cat-item">
+                <Link to="/products" className="footer-more-cat-link">
+                  Show More Categories →
+                </Link>
+              </li>
             </ul>
           </div>
 

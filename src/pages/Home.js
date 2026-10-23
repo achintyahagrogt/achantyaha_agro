@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { formatImageUrl } from '../utils/imageUtils';
+import { getAllCategories, getCategoryMeta } from '../utils/categoryUtils';
 import './Home.css';
 
 export const DEFAULT_HERO_SLIDES = [
@@ -184,22 +185,47 @@ const Home = () => {
     return () => { isMounted = false; };
   }, []);
 
+  const [categoriesList, setCategoriesList] = useState(() => getAllCategories());
+
+  useEffect(() => {
+    const handleCatUpdate = () => {
+      setCategoriesList(getAllCategories());
+    };
+    window.addEventListener('achintyah_categories_updated', handleCatUpdate);
+    window.addEventListener('storage', handleCatUpdate);
+    return () => {
+      window.removeEventListener('achintyah_categories_updated', handleCatUpdate);
+      window.removeEventListener('storage', handleCatUpdate);
+    };
+  }, []);
+
   const heroSlides = Array.isArray(content.heroSlides) && content.heroSlides.length > 0
     ? content.heroSlides
     : DEFAULT_HERO_SLIDES;
 
-  const slideIntervalSec = Number(content.heroSlideInterval) || 3;
+  const slideIntervalSec = 3;
 
-  // Auto-slide every 3 seconds (configurable by admin)
+  // Preload all hero slide images for instant, smooth display
   useEffect(() => {
-    if (isPaused || heroSlides.length <= 1) return;
+    heroSlides.forEach(slide => {
+      const imgSrc = typeof slide === 'string' ? slide : (slide.imageUrl || slide.url);
+      if (imgSrc) {
+        const img = new Image();
+        img.src = formatImageUrl(imgSrc);
+      }
+    });
+  }, [heroSlides]);
+
+  // Auto-slide every 3 seconds consistently without pausing on mouse hover
+  useEffect(() => {
+    if (heroSlides.length <= 1) return;
 
     const timer = setInterval(() => {
       setCurrentSlide(prev => (prev + 1) % heroSlides.length);
-    }, slideIntervalSec * 1000);
+    }, 3000);
 
     return () => clearInterval(timer);
-  }, [isPaused, heroSlides.length, slideIntervalSec, currentSlide]);
+  }, [heroSlides.length]);
 
   const nextSlide = () => {
     setCurrentSlide(prev => (prev + 1) % heroSlides.length);
@@ -240,8 +266,6 @@ const Home = () => {
       {/* Hero Section with Auto-sliding Background Images */}
       <section
         className="hero-section-new"
-        onMouseEnter={() => setIsPaused(true)}
-        onMouseLeave={() => setIsPaused(false)}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
         aria-label="Achintyah Hero Slideshow"
@@ -318,9 +342,14 @@ const Home = () => {
                 <polyline points="9 18 15 12 9 6"></polyline>
               </svg>
             </button>
+          </>
+        )}
 
-            {/* Clean, attractive pagination dots (NO 01/04 and NO paused indicator) */}
-            <div className="hero-slider-pagination">
+        {/* Curved Wave & Feature Badges Bar */}
+        <div className="hero-bottom-wave-bar">
+          {/* Centered slider pagination positioned a little above the green wave */}
+          {heroSlides.length > 1 && (
+            <div className="hero-slider-pagination" aria-label="Slide indicators">
               {heroSlides.map((_, dotIdx) => (
                 <button
                   key={dotIdx}
@@ -337,11 +366,7 @@ const Home = () => {
                 </button>
               ))}
             </div>
-          </>
-        )}
-
-        {/* Curved Wave & Feature Badges Bar */}
-        <div className="hero-bottom-wave-bar">
+          )}
           <svg className="wave-svg" viewBox="0 0 1440 120" preserveAspectRatio="none">
             <defs>
               <linearGradient id="heroWaveGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -418,16 +443,23 @@ const Home = () => {
           </div>
 
           <div className="features-single-row" ref={sliderRef}>
-            {features.map((f, i) => (
-              <Link to={f.link} key={i} className="feature-card feature-card-single">
-                <div className="feature-card-top">
-                  <div className="feature-icon">{f.icon}</div>
-                  <h3 className="feature-title">{f.title}</h3>
-                  <p className="feature-desc">{f.desc}</p>
-                </div>
-                <span className="feature-link">View Products →</span>
-              </Link>
-            ))}
+            {categoriesList.map((catName) => {
+              const meta = getCategoryMeta(catName);
+              return (
+                <Link
+                  to={`/products?category=${encodeURIComponent(catName)}`}
+                  key={catName}
+                  className="feature-card feature-card-single"
+                >
+                  <div className="feature-card-top">
+                    <div className="feature-icon">{meta.icon}</div>
+                    <h3 className="feature-title">{meta.title}</h3>
+                    <p className="feature-desc">{meta.desc}</p>
+                  </div>
+                  <span className="feature-link">View Products →</span>
+                </Link>
+              );
+            })}
           </div>
           <div style={{ textAlign: 'center', marginTop: '40px' }}>
             <Link to="/products" className="btn-primary">

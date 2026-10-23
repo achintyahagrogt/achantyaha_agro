@@ -135,6 +135,19 @@ app.delete('/api/products/:id', authenticateToken, requirePermission('delete'), 
 });
 
 // ----------------------------------------------------
+// CATEGORY ROUTES
+// ----------------------------------------------------
+app.get('/api/categories', (req, res) => {
+  const products = getProducts();
+  const defaultCats = ['Bio Fertilizers', 'Micronutrients', 'Water Soluble', 'Growth Regulators', 'Organic Inputs', 'Bio Pesticides'];
+  const catSet = new Set(defaultCats);
+  products.forEach(p => {
+    if (p.category) catSet.add(p.category.trim());
+  });
+  res.json(Array.from(catSet));
+});
+
+// ----------------------------------------------------
 // USER & PERMISSION MANAGEMENT ROUTES (Admin only)
 // ----------------------------------------------------
 app.get('/api/users', authenticateToken, requirePermission('manage_users'), (req, res) => {

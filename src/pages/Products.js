@@ -1,17 +1,42 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { defaultProducts } from '../data/defaultProducts';
 import { formatImageUrl } from '../utils/imageUtils';
+import { getAllCategories } from '../utils/categoryUtils';
 import './Products.css';
 
-const categories = ['All', 'Bio Fertilizers', 'Micronutrients', 'Water Soluble', 'Growth Regulators', 'Bio Pesticides', 'Organic Inputs'];
-
 const Products = () => {
+  const location = useLocation();
   const [products, setProducts] = useState(defaultProducts);
   const [loading, setLoading] = useState(false);
   const [activeCategory, setActiveCategory] = useState('All');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
+  const [allCategories, setAllCategories] = useState(() => ['All', ...getAllCategories()]);
+
+  // Read URL query parameter ?category=...
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const catQuery = params.get('category');
+    if (catQuery) {
+      setActiveCategory(catQuery);
+    }
+  }, [location.search]);
+
+  // Keep category list updated dynamically
+  useEffect(() => {
+    const updateCats = () => {
+      setAllCategories(['All', ...getAllCategories(products)]);
+    };
+    updateCats();
+
+    window.addEventListener('achintyah_categories_updated', updateCats);
+    window.addEventListener('storage', updateCats);
+    return () => {
+      window.removeEventListener('achintyah_categories_updated', updateCats);
+      window.removeEventListener('storage', updateCats);
+    };
+  }, [products]);
 
   useEffect(() => {
     let isMounted = true;
@@ -61,7 +86,8 @@ const Products = () => {
   }, []);
 
   const filtered = products.filter(p => {
-    const matchCat = activeCategory === 'All' || p.category === activeCategory;
+    const matchCat = activeCategory === 'All' || 
+      (p.category && p.category.trim().toLowerCase() === activeCategory.trim().toLowerCase());
     const matchSearch = (p.name && p.name.toLowerCase().includes(search.toLowerCase())) ||
                         (p.desc && p.desc.toLowerCase().includes(search.toLowerCase()));
     return matchCat && matchSearch;
@@ -98,10 +124,10 @@ const Products = () => {
               />
             </div>
             <div className="category-filters">
-              {categories.map(cat => (
+              {allCategories.map(cat => (
                 <button
                   key={cat}
-                  className={`cat-btn ${activeCategory === cat ? 'active' : ''}`}
+                  className={`cat-btn ${activeCategory.toLowerCase() === cat.toLowerCase() ? 'active' : ''}`}
                   onClick={() => setActiveCategory(cat)}
                 >
                   {cat}

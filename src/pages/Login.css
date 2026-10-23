@@ -183,3 +183,24 @@
   background: #e8f5e9;
   color: #2e7d32;
 }
+
+@media (max-width: 480px) {
+  .login-page {
+    padding: 80px 14px 30px;
+  }
+  .login-card {
+    padding: 24px 18px;
+    border-radius: 12px;
+    margin-top: 10px;
+  }
+  .login-title {
+    font-size: 22px;
+  }
+  .login-icon {
+    font-size: 32px;
+  }
+  .demo-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}

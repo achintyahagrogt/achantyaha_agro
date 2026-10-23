@@ -55,6 +55,7 @@ const Navbar = () => {
               <Link 
                 to={link.path} 
                 className={`nav-link ${location.pathname === link.path ? 'active' : ''}`}
+                onClick={() => setMenuOpen(false)}
               >
                 {link.label}
               </Link>
@@ -62,32 +63,41 @@ const Navbar = () => {
           ))}
           <li>
             {user ? (
-              <Link to="/admin" className="nav-link admin-nav-pill" title={`Logged in as ${user.name || user.username}`}>
+              <Link to="/admin" className="nav-link admin-nav-pill" title={`Logged in as ${user.name || user.username}`} onClick={() => setMenuOpen(false)}>
                 🔐 {t('adminPanel')}
               </Link>
             ) : (
-              <Link to="/login" className="nav-link">
+              <Link to="/login" className="nav-link" onClick={() => setMenuOpen(false)}>
                 🔐 {t('login')}
               </Link>
             )}
           </li>
-          <li>
+          <li className="nav-drawer-lang">
             <LanguageSelector />
           </li>
           <li>
-            <Link to="/contact" className="nav-cta">{t('getQuote')}</Link>
+            <Link to="/contact" className="nav-cta" onClick={() => setMenuOpen(false)}>{t('getQuote')}</Link>
           </li>
         </ul>
 
-        <button 
-          className={`hamburger ${menuOpen ? 'open' : ''}`}
-          onClick={() => setMenuOpen(!menuOpen)}
-          aria-label="Toggle menu"
-        >
-          <span></span>
-          <span></span>
-          <span></span>
-        </button>
+        <div className="nav-actions-mobile">
+          <div className="nav-mobile-lang-wrap">
+            <LanguageSelector />
+          </div>
+          <button 
+            className={`hamburger ${menuOpen ? 'open' : ''}`}
+            onClick={() => setMenuOpen(!menuOpen)}
+            aria-label="Toggle menu"
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+        </div>
+
+        {menuOpen && (
+          <div className="nav-backdrop" onClick={() => setMenuOpen(false)} aria-hidden="true" />
+        )}
       </div>
     </nav>
   );

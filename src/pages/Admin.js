@@ -4,6 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { defaultProducts } from '../data/defaultProducts';
 import { formatImageUrl } from '../utils/imageUtils';
 import { DEFAULT_HERO_SLIDES } from './Home';
+import { getAllCategories, saveNewCategory } from '../utils/categoryUtils';
 import './Admin.css';
 
 const ALL_PERMISSIONS = ['create', 'read', 'update', 'delete', 'manage_users'];
@@ -42,6 +43,22 @@ const Admin = () => {
   const [productForm, setProductForm] = useState({
     name: '', category: 'Bio Fertilizers', icon: '🌿', imageUrl: '', tag: '', desc: '', benefit: '', dose: '', crops: ''
   });
+  const [availableCategories, setAvailableCategories] = useState(() => getAllCategories());
+  const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
+  const [customCategoryInput, setCustomCategoryInput] = useState('');
+
+  useEffect(() => {
+    const handleCatUpdate = () => {
+      setAvailableCategories(getAllCategories());
+    };
+    window.addEventListener('achintyah_categories_updated', handleCatUpdate);
+    window.addEventListener('storage', handleCatUpdate);
+    return () => {
+      window.removeEventListener('achintyah_categories_updated', handleCatUpdate);
+      window.removeEventListener('storage', handleCatUpdate);
+    };
+  }, []);
+
   const [productViewMode, setProductViewMode] = useState('cards'); // 'cards' or 'table'
   const [productImageTab, setProductImageTab] = useState('upload'); // 'upload' or 'link'
   const [productImageUploading, setProductImageUploading] = useState(false);
@@ -625,6 +642,11 @@ const Admin = () => {
       category: productForm.category ? productForm.category.trim() : 'Bio Fertilizers',
       imageUrl: formatImageUrl(productForm.imageUrl)
     };
+
+    if (formattedProductForm.category) {
+      saveNewCategory(formattedProductForm.category);
+      setAvailableCategories(getAllCategories());
+    }
 
     const isEdit = !!editingProduct;
     const url = isEdit ? `${API_BASE}/products/${editingProduct.id}` : `${API_BASE}/products`;
@@ -1224,7 +1246,9 @@ const Admin = () => {
               disabled={!hasPermission('create')}
               onClick={() => {
                 setEditingProduct(null);
-                setProductForm({ name: '', category: 'Bio Fertilizers', icon: '🌿', imageUrl: '', tag: '', desc: '', benefit: '', dose: '', crops: '' });
+                setProductForm({ name: '', category: availableCategories[0] || 'Bio Fertilizers', icon: '🌿', imageUrl: '', tag: '', desc: '', benefit: '', dose: '', crops: '' });
+                setIsAddingNewCategory(false);
+                setCustomCategoryInput('');
                 setProductImageTab('upload');
                 setProductModalOpen(true);
               }}
@@ -1248,12 +1272,9 @@ const Admin = () => {
                 style={{ padding: '9px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', background: '#ffffff' }}
               >
                 <option value="All">All Categories ({products.length})</option>
-                <option value="Bio Fertilizers">Bio Fertilizers</option>
-                <option value="Micronutrients">Micronutrients</option>
-                <option value="Water Soluble">Water Soluble</option>
-                <option value="Organic Inputs">Organic Inputs</option>
-                <option value="Growth Regulators">Growth Regulators</option>
-                <option value="Bio Pesticides">Bio Pesticides</option>
+                {availableCategories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
               </select>
               {(productCategoryFilter !== 'All' || productSearch) && (
                 <button
@@ -1372,6 +1393,8 @@ const Admin = () => {
                       onClick={() => {
                         setEditingProduct(p);
                         setProductForm({ ...p, imageUrl: p.imageUrl || '' });
+                        setIsAddingNewCategory(false);
+                        setCustomCategoryInput('');
                         setProductImageTab(p.imageUrl && p.imageUrl.startsWith('/uploads') ? 'upload' : 'link');
                         setProductModalOpen(true);
                       }}
@@ -1452,6 +1475,8 @@ const Admin = () => {
                           onClick={() => {
                             setEditingProduct(p);
                             setProductForm({ ...p, imageUrl: p.imageUrl || '' });
+                            setIsAddingNewCategory(false);
+                            setCustomCategoryInput('');
                             setProductImageTab(p.imageUrl && p.imageUrl.startsWith('/uploads') ? 'upload' : 'link');
                             setProductModalOpen(true);
                           }}
@@ -2446,18 +2471,89 @@ const Admin = () => {
               </div>
 
               <div className="form-group">
-                <label>Category</label>
-                <select
-                  value={productForm.category}
-                  onChange={e => setProductForm({ ...productForm, category: e.target.value })}
-                >
-                  <option value="Bio Fertilizers">Bio Fertilizers</option>
-                  <option value="Micronutrients">Micronutrients</option>
-                  <option value="Water Soluble">Water Soluble</option>
-                  <option value="Organic Inputs">Organic Inputs</option>
-                  <option value="Growth Regulators">Growth Regulators</option>
-                  <option value="Bio Pesticides">Bio Pesticides</option>
-                </select>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ margin: 0 }}>Category</label>
+                  {!isAddingNewCategory && (
+                    <button
+                      type="button"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#1a472a',
+                        fontWeight: '600',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        padding: 0
+                      }}
+                      onClick={() => {
+                        setIsAddingNewCategory(true);
+                        setCustomCategoryInput('');
+                      }}
+                    >
+                      + Add Another Category
+                    </button>
+                  )}
+                </div>
+
+                {!isAddingNewCategory ? (
+                  <select
+                    value={productForm.category}
+                    onChange={e => {
+                      if (e.target.value === '__add_new__') {
+                        setIsAddingNewCategory(true);
+                        setCustomCategoryInput('');
+                      } else {
+                        setProductForm({ ...productForm, category: e.target.value });
+                      }
+                    }}
+                  >
+                    {availableCategories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                    <option value="__add_new__">➕ Add Another Category...</option>
+                  </select>
+                ) : (
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="text"
+                      placeholder="Enter new category name..."
+                      value={customCategoryInput}
+                      onChange={e => {
+                        setCustomCategoryInput(e.target.value);
+                        setProductForm({ ...productForm, category: e.target.value });
+                      }}
+                      autoFocus
+                      style={{ flex: 1, padding: '9px 12px', border: '1.5px solid #1a472a', borderRadius: '8px', fontSize: '13px' }}
+                    />
+                    <button
+                      type="button"
+                      className="btn-admin-primary"
+                      style={{ padding: '8px 12px', fontSize: '12px', whiteSpace: 'nowrap' }}
+                      onClick={() => {
+                        const trimmed = customCategoryInput.trim();
+                        if (trimmed) {
+                          saveNewCategory(trimmed);
+                          setAvailableCategories(getAllCategories());
+                          setProductForm({ ...productForm, category: trimmed });
+                          setIsAddingNewCategory(false);
+                        }
+                      }}
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-admin-cancel"
+                      style={{ padding: '8px 10px', fontSize: '12px' }}
+                      onClick={() => {
+                        setIsAddingNewCategory(false);
+                        setProductForm({ ...productForm, category: availableCategories[0] || 'Bio Fertilizers' });
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="form-group">
