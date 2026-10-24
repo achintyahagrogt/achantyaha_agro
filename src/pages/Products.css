@@ -184,13 +184,14 @@
 .product-desc {
   font-size: 0.78rem;
   color: var(--text-muted);
-  line-height: 1.45;
+  line-height: 1.5;
   margin-bottom: 12px;
   flex: 1;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  white-space: pre-line;
+  word-break: break-word;
+  max-height: 140px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .product-meta {
@@ -332,6 +333,8 @@ body:has(.modal-overlay) {
   color: var(--text-mid);
   line-height: 1.6;
   margin-bottom: 24px;
+  white-space: pre-line;
+  word-break: break-word;
 }
 
 .modal-details {

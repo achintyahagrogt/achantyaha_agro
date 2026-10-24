@@ -27,7 +27,7 @@ function initializeFirebaseAdmin() {
     credential: cert({
       projectId,
       clientEmail,
-      privateKey: privateKey.replace(/\\n/g, '\n')
+      privateKey: privateKey.trim().replace(/\\n/g, '\n')
     })
   });
 }

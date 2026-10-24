@@ -70,7 +70,7 @@ const Products = () => {
           if (idx !== -1) {
             list[idx] = lp;
           } else {
-            list.push(lp);
+            list.unshift(lp);
           }
         });
       } catch (e) {}
@@ -82,7 +82,14 @@ const Products = () => {
     };
 
     loadProducts();
-    return () => { isMounted = false; };
+
+    window.addEventListener('achintyah_products_updated', loadProducts);
+    window.addEventListener('storage', loadProducts);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('achintyah_products_updated', loadProducts);
+      window.removeEventListener('storage', loadProducts);
+    };
   }, []);
 
   const filtered = products.filter(p => {

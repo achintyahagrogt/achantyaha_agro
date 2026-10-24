@@ -8,47 +8,19 @@ import './Home.css';
 export const DEFAULT_HERO_SLIDES = [
   {
     id: "slide-1",
-    imageUrl: "/hero_farmer_bg.png",
-    tag: "MAHARASHTRA'S GREEN FUTURE",
-    title: "Nurturing Soil.\nGrowing Tomorrow.",
-    subtitle: "Achintyah Agrogreentech Pvt Ltd delivers cutting-edge bio-agricultural inputs, organic solutions, and sustainable green technology to empower Indian farmers.",
-    btnText: "Explore Products",
-    btnLink: "/products",
-    secondaryBtnText: "About Us",
-    secondaryBtnLink: "/about"
+    imageUrl: "/hero_farmer_bg.png"
   },
   {
     id: "slide-2",
-    imageUrl: "https://images.unsplash.com/photo-1592982537447-7440770cbfc9?w=1600&auto=format&fit=crop&q=80",
-    tag: "100% ORGANIC & SAFE BIO-INPUTS",
-    title: "Advanced Bio-Fertilizers.\nMaximum Soil Vitality.",
-    subtitle: "Multi-strain bio-inoculants and organic nutrients engineered to restore depleted soil microbiomes, enhance root growth, and maximize yield potential.",
-    btnText: "View Bio Fertilizers",
-    btnLink: "/products",
-    secondaryBtnText: "Our Services",
-    secondaryBtnLink: "/services"
+    imageUrl: "https://images.unsplash.com/photo-1592982537447-7440770cbfc9?w=1600&auto=format&fit=crop&q=80"
   },
   {
     id: "slide-3",
-    imageUrl: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1600&auto=format&fit=crop&q=80",
-    tag: "SCIENTIFICALLY FORMULATED",
-    title: "High-Purity Micronutrients.\nRapid Crop Absorption.",
-    subtitle: "Chelated micronutrient compounds and specialized water-soluble blends that prevent deficiencies and dramatically boost crop quality.",
-    btnText: "Explore Micronutrients",
-    btnLink: "/products",
-    secondaryBtnText: "Contact Advisory",
-    secondaryBtnLink: "/contact"
+    imageUrl: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1600&auto=format&fit=crop&q=80"
   },
   {
     id: "slide-4",
-    imageUrl: "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?w=1600&auto=format&fit=crop&q=80",
-    tag: "FARMER-CENTRIC INNOVATION",
-    title: "Sustainable Agriculture.\nProsperous Tomorrow.",
-    subtitle: "Partnering with progressive farmers, dealers, and FPOs across India with proven agronomic field guidance and premium agricultural formulations.",
-    btnText: "Partner With Us",
-    btnLink: "/contact",
-    secondaryBtnText: "Learn About Us",
-    secondaryBtnLink: "/about"
+    imageUrl: "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?w=1600&auto=format&fit=crop&q=80"
   }
 ];
 
@@ -114,25 +86,6 @@ const features = [
   },
 ];
 
-const renderHeroTitle = (title) => {
-  if (!title) {
-    return (
-      <>
-        Nurturing Soil.<br />
-        Growing<br />
-        Tomorrow.
-      </>
-    );
-  }
-  const lines = title.split('\n');
-  return lines.map((line, idx) => (
-    <React.Fragment key={idx}>
-      {line}
-      {idx < lines.length - 1 && <br />}
-    </React.Fragment>
-  ));
-};
-
 const Home = () => {
   const { t } = useLanguage();
   const [content, setContent] = useState(DEFAULT_HOME_CONTENT);
@@ -147,42 +100,51 @@ const Home = () => {
       ? 'http://localhost:5001'
       : '';
 
+    const applyData = (data) => {
+      if (!data) return;
+      setContent(prev => ({
+        ...prev,
+        ...data,
+        heroSlides: Array.isArray(data.heroSlides) && data.heroSlides.length > 0
+          ? data.heroSlides
+          : (prev.heroSlides || DEFAULT_HERO_SLIDES)
+      }));
+    };
+
     const loadHomeContent = async () => {
+      try {
+        const localContent = JSON.parse(localStorage.getItem('achintyah_home_content') || 'null');
+        if (isMounted && localContent) {
+          applyData(localContent);
+        }
+      } catch (e) { }
+
       try {
         const res = await fetch(`${API_BASE}/api/home-content`);
         if (res.ok) {
           const data = await res.json();
           if (isMounted && data) {
-            setContent(prev => ({
-              ...prev,
-              ...data,
-              heroSlides: Array.isArray(data.heroSlides) && data.heroSlides.length > 0
-                ? data.heroSlides
-                : (prev.heroSlides || DEFAULT_HERO_SLIDES)
-            }));
-            return;
+            applyData(data);
           }
         }
       } catch (err) {
         // Quietly failover to LocalStorage fallback
       }
-
-      try {
-        const localContent = JSON.parse(localStorage.getItem('achintyah_home_content') || '{}');
-        if (isMounted && localContent) {
-          setContent(prev => ({
-            ...prev,
-            ...localContent,
-            heroSlides: Array.isArray(localContent.heroSlides) && localContent.heroSlides.length > 0
-              ? localContent.heroSlides
-              : (prev.heroSlides || DEFAULT_HERO_SLIDES)
-          }));
-        }
-      } catch (e) { }
     };
 
     loadHomeContent();
-    return () => { isMounted = false; };
+
+    const handleHomeUpdate = () => {
+      loadHomeContent();
+    };
+    window.addEventListener('achintyah_home_updated', handleHomeUpdate);
+    window.addEventListener('storage', handleHomeUpdate);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('achintyah_home_updated', handleHomeUpdate);
+      window.removeEventListener('storage', handleHomeUpdate);
+    };
   }, []);
 
   const [categoriesList, setCategoriesList] = useState(() => getAllCategories());
@@ -292,31 +254,6 @@ const Home = () => {
               </div>
             );
           })}
-          {/* Transparent soft gradient overlay for crystal-clear image visibility */}
-          <div className="hero-bg-overlay"></div>
-        </div>
-
-        {/* Main Hero Content - Only the Main Text Appears */}
-        <div className="hero-container-new">
-          <div className="hero-left-content">
-            <span className="hero-green-label">MAHARASHTRA'S GREEN FUTURE</span>
-            <h1 className="hero-new-title">
-              Nurturing Soil.<br />
-              Growing<br />
-              Tomorrow.
-            </h1>
-            <p className="hero-new-subtitle">
-              Achintyah Agrogreentech Pvt Ltd delivers cutting-edge bio-agricultural inputs, organic solutions, and sustainable green technology to empower Indian farmers.
-            </p>
-            <div className="hero-new-actions">
-              <Link to="/products" className="btn-gold-pill">
-                Explore Products <span>→</span>
-              </Link>
-              <Link to="/about" className="btn-outline-pill">
-                About Us
-              </Link>
-            </div>
-          </div>
         </div>
 
         {/* Prev / Next Slider Arrows */}

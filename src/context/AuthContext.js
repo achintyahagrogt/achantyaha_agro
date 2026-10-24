@@ -197,6 +197,20 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('achintyah_user');
   };
 
+  const getFreshToken = async () => {
+    try {
+      if (auth && auth.currentUser) {
+        const fresh = await auth.currentUser.getIdToken();
+        setToken(fresh);
+        localStorage.setItem('achintyah_token', fresh);
+        return fresh;
+      }
+    } catch (e) {
+      console.warn('Could not refresh ID token:', e);
+    }
+    return token || localStorage.getItem('achintyah_token');
+  };
+
   const hasPermission = (permission) => {
     if (!user) return false;
 
@@ -215,6 +229,7 @@ export const AuthProvider = ({ children }) => {
       value={{
         user,
         token,
+        getFreshToken,
         login,
         logout,
         hasPermission,

@@ -23,11 +23,18 @@ const PORT = process.env.PORT || 5001;
 const corsOrigin = process.env.CORS_ORIGIN;
 app.use(cors(corsOrigin ? { origin: corsOrigin } : {}));
 
-// Bound request body size to 100kb
-app.use(express.json({ limit: '100kb' }));
+// Body parser with 50MB limit to handle high-resolution image uploads & base64 payloads
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Ensure public/uploads directory exists on server start
+const publicUploadsDir = path.join(__dirname, '../public/uploads');
+if (!fs.existsSync(publicUploadsDir)) {
+  fs.mkdirSync(publicUploadsDir, { recursive: true });
+}
 
 // Static uploads directory serving
-app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
+app.use('/uploads', express.static(publicUploadsDir));
 
 
 // Rate Limiters
@@ -92,7 +99,7 @@ app.post('/api/products', authenticateToken, requirePermission('create'), (req, 
     crops: crops ? crops.trim() : ''
   };
 
-  products.push(newProduct);
+  products.unshift(newProduct);
   setProducts(products);
 
   res.status(201).json({ message: 'Product created successfully', product: newProduct });
@@ -145,6 +152,30 @@ app.get('/api/categories', (req, res) => {
     if (p.category) catSet.add(p.category.trim());
   });
   res.json(Array.from(catSet));
+});
+
+app.delete('/api/categories/:name', authenticateToken, requirePermission('delete'), (req, res) => {
+  const catName = decodeURIComponent(req.params.name || '').trim();
+  if (!catName) {
+    return res.status(400).json({ message: 'Category name is required' });
+  }
+
+  const products = getProducts();
+  let reassigned = 0;
+  products.forEach(p => {
+    if (p.category && p.category.toLowerCase() === catName.toLowerCase()) {
+      p.category = 'Bio Fertilizers';
+      reassigned++;
+    }
+  });
+
+  if (reassigned > 0) {
+    setProducts(products);
+  }
+
+  res.json({
+    message: `Category '${catName}' deleted. ${reassigned} product(s) reassigned to Bio Fertilizers.`
+  });
 });
 
 // ----------------------------------------------------
@@ -376,13 +407,13 @@ app.put('/api/home-content', authenticateToken, requirePermission('update'), (re
   res.json({ message: 'Homepage content updated successfully', homeContent: updatedContent });
 });
 
-// Image Upload Endpoint for Admin Panel (supports base64 upload up to 10MB)
+// Image Upload Endpoint for Admin Panel (supports base64 image upload)
 app.post('/api/upload-image', authenticateToken, (req, res, next) => {
   if (req.user && (req.user.role === 'admin' || (Array.isArray(req.user.permissions) && (req.user.permissions.includes('update') || req.user.permissions.includes('create'))))) {
     return next();
   }
   return res.status(403).json({ message: "Access denied. Requires 'create' or 'update' permission." });
-}, express.json({ limit: '10mb' }), (req, res) => {
+}, (req, res) => {
   try {
     const { imageBase64, filename } = req.body;
     if (!imageBase64) {

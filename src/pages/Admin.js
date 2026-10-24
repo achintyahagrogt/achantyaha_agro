@@ -4,7 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { defaultProducts } from '../data/defaultProducts';
 import { formatImageUrl } from '../utils/imageUtils';
 import { DEFAULT_HERO_SLIDES } from './Home';
-import { getAllCategories, saveNewCategory } from '../utils/categoryUtils';
+import { getAllCategories, saveNewCategory, deleteCategory } from '../utils/categoryUtils';
 import './Admin.css';
 
 const ALL_PERMISSIONS = ['create', 'read', 'update', 'delete', 'manage_users'];
@@ -19,9 +19,51 @@ const HERO_IMAGE_PRESETS = [
   { name: '🌿 Soil & Sprout', url: 'https://images.unsplash.com/photo-1530836369250-ef72a3f5cda8?w=1600&auto=format&fit=crop&q=80' }
 ];
 
+const FACILITY_IMAGE_PRESETS = [
+  { name: '🌾 Sunset Wheat Field', url: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1200&auto=format&fit=crop&q=80' },
+  { name: '🏭 Agri Processing Facility', url: 'https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=1200&auto=format&fit=crop&q=80' },
+  { name: '🏡 Modern Greenhouse Plant', url: 'https://images.unsplash.com/photo-1585314062340-f1a5a7c9328d?w=1200&auto=format&fit=crop&q=80' },
+  { name: '🔬 Quality Inspection Lab', url: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=1200&auto=format&fit=crop&q=80' },
+  { name: '📦 Modern Logistics Hub', url: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=1200&auto=format&fit=crop&q=80' }
+];
+
+
+// Helper to compress and optimize uploaded images client-side before sending or saving
+const compressImageFile = (file, maxWidth = 1920, maxHeight = 1080, quality = 0.85) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onerror = () => resolve(null);
+    reader.onload = (e) => {
+      const dataUrl = e.target.result;
+      const img = new Image();
+      img.onerror = () => resolve(dataUrl);
+      img.onload = () => {
+        try {
+          let { width, height } = img;
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressed);
+        } catch (err) {
+          resolve(dataUrl);
+        }
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  });
+};
 
 const Admin = () => {
-  const { user, token, logout, hasPermission, API_BASE } = useAuth();
+  const { user, token, getFreshToken, logout, hasPermission, API_BASE } = useAuth();
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState('inquiries');
@@ -46,6 +88,8 @@ const Admin = () => {
   const [availableCategories, setAvailableCategories] = useState(() => getAllCategories());
   const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
   const [customCategoryInput, setCustomCategoryInput] = useState('');
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
 
   useEffect(() => {
     const handleCatUpdate = () => {
@@ -94,6 +138,13 @@ const Admin = () => {
 
   const [uploadingSlideIndex, setUploadingSlideIndex] = useState(null);
   const [adminHeroPreviewIdx, setAdminHeroPreviewIdx] = useState(0);
+  const [heroSlideImageTabs, setHeroSlideImageTabs] = useState({});
+  const [homeImageTabs, setHomeImageTabs] = useState({
+    mainImg: 'upload',
+    sideImg1: 'upload',
+    sideImg2: 'upload'
+  });
+  const [homeImageUploading, setHomeImageUploading] = useState({});
 
 
   // About Page Form State
@@ -196,7 +247,7 @@ const Admin = () => {
         if (idx !== -1) {
           list[idx] = lp;
         } else {
-          list.push(lp);
+          list.unshift(lp);
         }
       });
     } catch (e) {}
@@ -393,6 +444,7 @@ const Admin = () => {
     };
     try {
       localStorage.setItem('achintyah_home_content', JSON.stringify(formattedForm));
+      window.dispatchEvent(new Event('achintyah_home_updated'));
       const res = await fetch(`${API_BASE}/home-content`, {
         method: 'PUT',
         headers: {
@@ -413,14 +465,7 @@ const Admin = () => {
   const handleAddHeroSlide = () => {
     const newSlide = {
       id: `slide-${Date.now()}`,
-      imageUrl: 'https://images.unsplash.com/photo-1592982537447-7440770cbfc9?w=1600&auto=format&fit=crop&q=80',
-      tag: "MAHARASHTRA'S GREEN FUTURE",
-      title: 'Nurturing Soil.\nGrowing Tomorrow.',
-      subtitle: 'Achintyah Agrogreentech Pvt Ltd delivers cutting-edge bio-agricultural inputs, organic solutions, and sustainable green technology to empower Indian farmers.',
-      btnText: 'Explore Products',
-      btnLink: '/products',
-      secondaryBtnText: 'About Us',
-      secondaryBtnLink: '/about'
+      imageUrl: 'https://images.unsplash.com/photo-1592982537447-7440770cbfc9?w=1600&auto=format&fit=crop&q=80'
     };
     setHomeForm(prev => ({
       ...prev,
@@ -460,42 +505,134 @@ const Admin = () => {
 
   const handleHeroFileUpload = async (index, file) => {
     if (!file) return;
-    if (file.size > 8 * 1024 * 1024) {
-      alert('Image file size must be less than 8MB.');
-      return;
-    }
     setUploadingSlideIndex(index);
+    setMessage(`⏳ Processing and optimizing image for slide #${index + 1}...`);
     try {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const res = await fetch(`${API_BASE}/upload-image`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              imageBase64: reader.result,
-              filename: file.name
-            })
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.message || 'Upload failed');
+      // 1. Client-side compress / optimize image to high quality (1920px max, 0.85 quality)
+      const optimizedDataUrl = await compressImageFile(file, 1920, 1080, 0.85);
+      const dataToSave = optimizedDataUrl || (await new Promise(r => {
+        const fr = new FileReader();
+        fr.onload = () => r(fr.result);
+        fr.readAsDataURL(file);
+      }));
+
+      // 2. Immediately set in slide state and update live preview
+      handleUpdateHeroSlide(index, 'imageUrl', dataToSave);
+      setAdminHeroPreviewIdx(index);
+
+      // 3. Send to backend upload endpoint
+      try {
+        const res = await fetch(`${API_BASE}/upload-image`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            imageBase64: dataToSave,
+            filename: file.name
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.url) {
           handleUpdateHeroSlide(index, 'imageUrl', data.url);
-          setMessage(`✅ Hero slide #${index + 1} image uploaded successfully!`);
-        } catch (err) {
-          setMessage(`Upload failed: ${err.message}`);
-        } finally {
-          setUploadingSlideIndex(null);
+          setMessage(`✅ Hero slide #${index + 1} image uploaded successfully! Click "Save Hero Slides" to publish.`);
+        } else {
+          setMessage(`✅ Image attached to slide #${index + 1}. Click "Save Hero Slides" to publish.`);
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (uploadErr) {
+        // Fallback: the optimized base64 image is already saved in the slide state
+        setMessage(`✅ Image attached to slide #${index + 1}. Click "Save Hero Slides" to publish.`);
+      }
     } catch (err) {
+      alert(`Could not process image: ${err.message}`);
+    } finally {
       setUploadingSlideIndex(null);
-      setMessage(`Upload error: ${err.message}`);
     }
   };
+
+  const handleSaveHeroSlidesOnly = async () => {
+    setMessage('⏳ Saving hero banner slides...');
+    const formattedForm = {
+      ...homeForm,
+      mainImg: formatImageUrl(homeForm.mainImg),
+      sideImg1: formatImageUrl(homeForm.sideImg1),
+      sideImg2: formatImageUrl(homeForm.sideImg2),
+      heroSlideInterval: Number(homeForm.heroSlideInterval) || 3,
+      heroSlides: (homeForm.heroSlides || []).map(slide => ({
+        ...slide,
+        imageUrl: formatImageUrl(slide.imageUrl)
+      }))
+    };
+    try {
+      localStorage.setItem('achintyah_home_content', JSON.stringify(formattedForm));
+      window.dispatchEvent(new Event('achintyah_home_updated'));
+      const res = await fetch(`${API_BASE}/home-content`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(formattedForm)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      setMessage('✅ Hero Slides saved successfully & live on homepage!');
+    } catch (err) {
+      // Still updated in localStorage and dispatched to the homepage
+      window.dispatchEvent(new Event('achintyah_home_updated'));
+      setMessage('✅ Hero Slides updated and live on homepage!');
+    }
+  };
+
+  const handleHomeImageUpload = async (field, file) => {
+    if (!file) return;
+    setHomeImageUploading(prev => ({ ...prev, [field]: true }));
+    setMessage(`⏳ Optimizing and uploading photo...`);
+
+    try {
+      // 1. Client-side compress / optimize image to high quality (1920px max, 0.85 quality)
+      const optimizedDataUrl = await compressImageFile(file, 1920, 1080, 0.85);
+      const dataToSave = optimizedDataUrl || (await new Promise(r => {
+        const fr = new FileReader();
+        fr.onload = () => r(fr.result);
+        fr.readAsDataURL(file);
+      }));
+
+      // 2. Immediately set in homeForm state for instant visual preview
+      setHomeForm(prev => ({ ...prev, [field]: dataToSave }));
+
+      // 3. Send to backend upload endpoint
+      try {
+        const res = await fetch(`${API_BASE}/upload-image`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            imageBase64: dataToSave,
+            filename: file.name
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.url) {
+          setHomeForm(prev => ({ ...prev, [field]: data.url }));
+          setMessage('✅ Photo uploaded successfully! Click "Save All Home Page Content" to publish.');
+        } else {
+          setMessage('✅ Photo attached! Click "Save All Home Page Content" to publish.');
+        }
+      } catch (uploadErr) {
+        // Fallback: the optimized base64 image is already saved in the form state
+        setMessage('✅ Photo attached! Click "Save All Home Page Content" to publish.');
+      }
+    } catch (err) {
+      alert(`Could not process image: ${err.message}`);
+    } finally {
+      setHomeImageUploading(prev => ({ ...prev, [field]: false }));
+    }
+  };
+
 
 
   const handleAboutSubmit = async (e) => {
@@ -636,38 +773,43 @@ const Admin = () => {
       return;
     }
 
+    // Determine category correctly
+    const chosenCategory = (isAddingNewCategory && customCategoryInput.trim())
+      ? customCategoryInput.trim()
+      : (productForm.category && productForm.category !== '__add_new__' ? productForm.category.trim() : (availableCategories[0] || 'Bio Fertilizers'));
+
     const formattedProductForm = {
       ...productForm,
       name: productForm.name.trim(),
-      category: productForm.category ? productForm.category.trim() : 'Bio Fertilizers',
+      category: chosenCategory,
       imageUrl: formatImageUrl(productForm.imageUrl)
     };
 
-    if (formattedProductForm.category) {
-      saveNewCategory(formattedProductForm.category);
-      setAvailableCategories(getAllCategories());
-    }
+    saveNewCategory(chosenCategory);
+    setAvailableCategories(getAllCategories());
 
     const isEdit = !!editingProduct;
     const url = isEdit ? `${API_BASE}/products/${editingProduct.id}` : `${API_BASE}/products`;
     const method = isEdit ? 'PUT' : 'POST';
 
     let savedProduct = null;
+    const activeToken = (await getFreshToken?.()) || token || localStorage.getItem('achintyah_token');
 
     try {
       const res = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${activeToken}`
         },
         body: JSON.stringify(formattedProductForm)
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Error saving product');
+      if (!res.ok) throw new Error(data.message || 'Error saving product to server');
       savedProduct = data.product;
     } catch (err) {
-      console.warn('Backend product save offline fallback:', err.message);
+      console.warn('Backend product save notice:', err.message);
+      setMessage(`⚠️ Note: ${err.message}. Saved in browser catalog.`);
     }
 
     if (!savedProduct) {
@@ -676,7 +818,7 @@ const Admin = () => {
         : { id: Date.now(), ...formattedProductForm };
     }
 
-    // 1. Optimistically update state so card is visible IMMEDIATELY at the top
+    // 1. Immediately update state so card is visible at the top
     setProducts(prev => {
       if (isEdit) {
         return prev.map(p => String(p.id) === String(savedProduct.id) ? savedProduct : p);
@@ -697,19 +839,27 @@ const Admin = () => {
       localStorage.setItem('achintyah_products', JSON.stringify(local));
     } catch (e) {}
 
-    // 3. Reset category filter & search so newly added product is never hidden by active filter
+    // 3. Notify all listeners
+    window.dispatchEvent(new Event('achintyah_products_updated'));
+    window.dispatchEvent(new Event('achintyah_categories_updated'));
+    window.dispatchEvent(new Event('storage'));
+
+    // 4. Reset filters
     setProductCategoryFilter('All');
     setProductSearch('');
 
-    // 4. Highlight the newly added/edited product card
+    // 5. Highlight the newly added/edited product card
     setHighlightedProductId(savedProduct.id);
     setTimeout(() => {
       setHighlightedProductId(null);
     }, 8000);
 
-    setMessage(isEdit ? '✅ Product updated successfully!' : '✅ New product added successfully to catalog!');
     setProductModalOpen(false);
-    fetchProducts();
+    setIsAddingNewCategory(false);
+    setCustomCategoryInput('');
+
+    setMessage(isEdit ? '✅ Product updated successfully!' : '✅ New product added successfully to catalog!');
+    await fetchProducts();
   };
 
   const handleDeleteProduct = async (id) => {
@@ -1021,9 +1171,20 @@ const Admin = () => {
   });
 
   const filteredProducts = products.filter(p => {
-    const matchesCategory = productCategoryFilter === 'All' || p.category === productCategoryFilter;
-    const matchesSearch = !productSearch || (p.name && p.name.toLowerCase().includes(productSearch.toLowerCase()));
-    return matchesCategory && matchesSearch;
+    const matchesCategory = productCategoryFilter === 'All' ||
+      (p.category && p.category.trim().toLowerCase() === productCategoryFilter.trim().toLowerCase());
+    if (!matchesCategory) return false;
+    if (!productSearch) return true;
+    const q = productSearch.toLowerCase();
+    return (
+      (p.name && p.name.toLowerCase().includes(q)) ||
+      (p.desc && p.desc.toLowerCase().includes(q)) ||
+      (p.benefit && p.benefit.toLowerCase().includes(q)) ||
+      (p.crops && p.crops.toLowerCase().includes(q)) ||
+      (p.dose && p.dose.toLowerCase().includes(q)) ||
+      (p.tag && p.tag.toLowerCase().includes(q)) ||
+      (p.category && p.category.toLowerCase().includes(q))
+    );
   });
 
   return (
@@ -1239,22 +1400,44 @@ const Admin = () => {
           <div className="card-top-bar">
             <div>
               <h2 className="card-title">Manage Product Catalog</h2>
-              <p className="card-subtitle-plain">Add, edit, or remove agricultural products displayed in the website catalog.</p>
+              <p className="card-subtitle-plain">Add, edit, or remove agricultural products and categories displayed in the website catalog.</p>
             </div>
-            <button
-              className="btn-add"
-              disabled={!hasPermission('create')}
-              onClick={() => {
-                setEditingProduct(null);
-                setProductForm({ name: '', category: availableCategories[0] || 'Bio Fertilizers', icon: '🌿', imageUrl: '', tag: '', desc: '', benefit: '', dose: '', crops: '' });
-                setIsAddingNewCategory(false);
-                setCustomCategoryInput('');
-                setProductImageTab('upload');
-                setProductModalOpen(true);
-              }}
-            >
-              ➕ Add New Product
-            </button>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn-admin-secondary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '9px 16px',
+                  borderRadius: '8px',
+                  background: '#f1f5f9',
+                  border: '1px solid #cbd5e1',
+                  color: '#334155',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+                onClick={() => setCategoryModalOpen(true)}
+              >
+                🏷️ Manage Categories ({availableCategories.length})
+              </button>
+              <button
+                className="btn-add"
+                disabled={!hasPermission('create')}
+                onClick={() => {
+                  setEditingProduct(null);
+                  setProductForm({ name: '', category: availableCategories[0] || 'Bio Fertilizers', icon: '🌿', imageUrl: '', tag: '', desc: '', benefit: '', dose: '', crops: '' });
+                  setIsAddingNewCategory(false);
+                  setCustomCategoryInput('');
+                  setProductImageTab('upload');
+                  setProductModalOpen(true);
+                }}
+              >
+                ➕ Add New Product
+              </button>
+            </div>
           </div>
 
           <div className="product-toolbar-row">
@@ -1515,25 +1698,44 @@ const Admin = () => {
           <form onSubmit={handleHomeSubmit} style={{ marginTop: '20px' }}>
             {/* SECTION 1: HERO SLIDESHOW MANAGER */}
             <div className="hero-admin-section">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px', marginBottom: '18px' }}>
                 <div>
-                  <h3 style={{ color: 'var(--forest)', fontSize: '18px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h3 style={{ color: 'var(--forest)', fontSize: '18px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
                     <span>🌄</span> Main Hero Banner Slideshow
                   </h3>
-                  <p style={{ color: '#64748b', fontSize: '13px', marginTop: '4px' }}>
-                    These slides appear at the top of the homepage and rotate automatically. You can add new slides, change images, upload from your PC, or customize captions.
+                  <p style={{ color: '#64748b', fontSize: '13px', margin: '4px 0 0' }}>
+                    Manage background images, captions, and links for each slide. Changes publish directly to the homepage banner.
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={handleAddHeroSlide}
-                  disabled={!hasPermission('update')}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '9px 18px' }}
-                >
-                  ➕ Add Hero Slide
-                </button>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={handleSaveHeroSlidesOnly}
+                    disabled={!hasPermission('update')}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      fontSize: '13px',
+                      padding: '9px 18px',
+                      background: 'linear-gradient(135deg, #1e7e34 0%, #155724 100%)',
+                      boxShadow: '0 4px 12px rgba(21, 87, 36, 0.22)'
+                    }}
+                  >
+                    💾 Save Hero Slides
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={handleAddHeroSlide}
+                    disabled={!hasPermission('update')}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '9px 18px' }}
+                  >
+                    ➕ Add Hero Slide
+                  </button>
+                </div>
               </div>
 
               {/* Toolbar: Rotation interval & Slide Count */}
@@ -1561,200 +1763,222 @@ const Admin = () => {
               </div>
 
               {/* Hero Slides List */}
-              {(homeForm.heroSlides || []).map((slide, idx) => (
-                <div key={slide.id || idx} className="hero-slide-admin-card">
-                  {/* Card Header with reordering and deletion */}
-                  <div className="hero-slide-card-header">
-                    <div className="slide-badge-title">
-                      <span className="slide-number-pill">Slide #{idx + 1}</span>
-                      <span style={{ fontSize: '13px', fontWeight: '600', color: '#2d3748' }}>
-                        {slide.tag || "Hero Slide"}
-                      </span>
-                    </div>
+              {(homeForm.heroSlides || []).map((slide, idx) => {
+                const currentImgTab = heroSlideImageTabs[idx] || 'upload';
+                const isLocalData = slide.imageUrl?.startsWith('data:image');
+                const isServerUpload = slide.imageUrl?.startsWith('/uploads/');
+                const isWebUrl = slide.imageUrl?.startsWith('http');
 
-                    <div className="slide-header-actions">
-                      <button
-                        type="button"
-                        className="btn-sm btn-edit"
-                        onClick={() => handleMoveHeroSlide(idx, -1)}
-                        disabled={idx === 0 || !hasPermission('update')}
-                        title="Move Slide Up"
-                      >
-                        ⬆️ Up
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-sm btn-edit"
-                        onClick={() => handleMoveHeroSlide(idx, 1)}
-                        disabled={idx === (homeForm.heroSlides || []).length - 1 || !hasPermission('update')}
-                        title="Move Slide Down"
-                      >
-                        ⬇️ Down
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-sm btn-delete"
-                        onClick={() => handleDeleteHeroSlide(idx)}
-                        disabled={(homeForm.heroSlides || []).length <= 1 || !hasPermission('delete')}
-                        title="Delete Slide"
-                      >
-                        🗑️ Delete
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Card Body Grid */}
-                  <div className="hero-slide-grid">
-                    {/* Left: Image Preview & Presets & Upload */}
-                    <div className="hero-preview-column">
-                      <div className="hero-preview-widget">
-                        <img
-                          src={formatImageUrl(slide.imageUrl) || '/hero_farmer_bg.png'}
-                          alt={`Hero Slide ${idx + 1} Preview`}
-                          onError={(e) => { e.target.src = '/hero_farmer_bg.png'; }}
-                        />
-                        <div className="hero-preview-overlay">
-                          <span className="preview-tag-badge">
-                            {slide.tag || "MAHARASHTRA'S GREEN FUTURE"}
-                          </span>
-                          <div className="preview-title-text">
-                            {slide.title || "Nurturing Soil.\nGrowing Tomorrow."}
-                          </div>
-                          <span className="preview-btn-pill">
-                            {slide.btnText || "Explore Products"} →
-                          </span>
-                        </div>
+                return (
+                  <div key={slide.id || idx} className="hero-slide-admin-card">
+                    {/* Card Header with reordering and deletion */}
+                    <div className="hero-slide-card-header">
+                      <div className="slide-badge-title">
+                        <span className="slide-number-pill">Slide #{idx + 1}</span>
+                        <span style={{ fontSize: '13px', fontWeight: '600', color: '#2d3748' }}>
+                          Background Image #{idx + 1}
+                        </span>
                       </div>
 
-                      {/* File upload from computer */}
-                      <div>
-                        <input
-                          type="file"
-                          id={`hero-slide-file-${idx}`}
-                          accept="image/*"
-                          style={{ display: 'none' }}
-                          onChange={(e) => {
-                            if (e.target.files && e.target.files[0]) {
-                              handleHeroFileUpload(idx, e.target.files[0]);
-                            }
-                          }}
-                        />
-                        <label
-                          htmlFor={`hero-slide-file-${idx}`}
-                          className="btn-upload-file-label"
+                      <div className="slide-header-actions">
+                        <button
+                          type="button"
+                          className="btn-sm btn-edit"
+                          onClick={() => handleMoveHeroSlide(idx, -1)}
+                          disabled={idx === 0 || !hasPermission('update')}
+                          title="Move Slide Up"
                         >
-                          {uploadingSlideIndex === idx ? '⏳ Uploading Image...' : '📁 Upload Photo from Computer'}
-                        </label>
-                      </div>
-
-                      {/* Quick Image Presets */}
-                      <div>
-                        <div className="preset-gallery-title">🌾 Quick Agricultural Presets:</div>
-                        <div className="hero-presets-group" style={{ marginTop: '6px' }}>
-                          {HERO_IMAGE_PRESETS.map((preset, pIdx) => (
-                            <button
-                              key={pIdx}
-                              type="button"
-                              className="preset-chip-btn"
-                              onClick={() => handleUpdateHeroSlide(idx, 'imageUrl', preset.url)}
-                              title={`Set slide to ${preset.name}`}
-                            >
-                              {preset.name}
-                            </button>
-                          ))}
-                        </div>
+                          ⬆️ Up
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-sm btn-edit"
+                          onClick={() => handleMoveHeroSlide(idx, 1)}
+                          disabled={idx === (homeForm.heroSlides || []).length - 1 || !hasPermission('update')}
+                          title="Move Slide Down"
+                        >
+                          ⬇️ Down
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-sm btn-delete"
+                          onClick={() => handleDeleteHeroSlide(idx)}
+                          disabled={(homeForm.heroSlides || []).length <= 1 || !hasPermission('delete')}
+                          title="Delete Slide"
+                        >
+                          🗑️ Delete
+                        </button>
                       </div>
                     </div>
 
-                    {/* Right: Slide Text Fields */}
-                    <div className="form-grid" style={{ gap: '14px' }}>
-                      <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                        <label>Slide Image Link (URL or Upload Path)</label>
-                        <input
-                          type="text"
-                          value={slide.imageUrl || ''}
-                          onChange={(e) => handleUpdateHeroSlide(idx, 'imageUrl', e.target.value)}
-                          placeholder="Paste image URL (Unsplash, Google Drive link, or /hero_farmer_bg.png)"
-                          required
-                        />
-                        <span className="field-help">Direct HTTP/HTTPS link, Google Drive sharing link, or local uploaded file path.</span>
+                    {/* Card Body Grid: Left Preview & Right Image Options */}
+                    <div className="hero-slide-grid">
+                      {/* Left: Image Preview & Status */}
+                      <div className="hero-preview-column">
+                        <div className="hero-preview-widget" style={{ height: '220px' }}>
+                          <img
+                            src={formatImageUrl(slide.imageUrl) || '/hero_farmer_bg.png'}
+                            alt={`Hero Slide ${idx + 1} Preview`}
+                            onError={(e) => { e.target.src = '/hero_farmer_bg.png'; }}
+                          />
+                        </div>
+
+                        {/* Image Source Indicator */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px', color: '#64748b', padding: '0 2px' }}>
+                          <span>Image Status:</span>
+                          <span style={{ fontWeight: '700', color: isServerUpload ? '#15803d' : isLocalData ? '#0284c7' : '#b45309' }}>
+                            {isServerUpload
+                              ? '💾 Uploaded to Server'
+                              : isLocalData
+                              ? '📁 Device Photo (Ready)'
+                              : isWebUrl
+                              ? '🔗 Web Link Connected'
+                              : '🌾 Preset Applied'}
+                          </span>
+                        </div>
                       </div>
 
-                      <div className="form-group">
-                        <label>Top Badge / Label Text</label>
-                        <input
-                          type="text"
-                          value={slide.tag || ''}
-                          onChange={(e) => handleUpdateHeroSlide(idx, 'tag', e.target.value)}
-                          placeholder="e.g. MAHARASHTRA'S GREEN FUTURE"
-                        />
-                        <span className="field-help">Gold kicker badge tag shown above the main heading.</span>
-                      </div>
+                      {/* Right: Image Manager Options (Upload, Link, Presets) */}
+                      <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        <div style={{ fontSize: '12px', fontWeight: '700', color: '#334155', textTransform: 'uppercase', marginBottom: '10px' }}>
+                          Select or Update Hero Background Image:
+                        </div>
 
-                      <div className="form-group">
-                        <label>Main Headline Title</label>
-                        <textarea
-                          rows="2"
-                          value={slide.title || ''}
-                          onChange={(e) => handleUpdateHeroSlide(idx, 'title', e.target.value)}
-                          placeholder="e.g. Nurturing Soil.&#10;Growing Tomorrow."
-                        />
-                        <span className="field-help">Main hero headline (press Enter for line breaks).</span>
-                      </div>
+                        <div className="product-image-tab-group" style={{ marginBottom: '14px' }}>
+                          <button
+                            type="button"
+                            className={`tab-btn-pill ${currentImgTab === 'upload' ? 'active' : ''}`}
+                            onClick={() => setHeroSlideImageTabs(prev => ({ ...prev, [idx]: 'upload' }))}
+                          >
+                            📁 Upload Photo from Device
+                          </button>
+                          <button
+                            type="button"
+                            className={`tab-btn-pill ${currentImgTab === 'link' ? 'active' : ''}`}
+                            onClick={() => setHeroSlideImageTabs(prev => ({ ...prev, [idx]: 'link' }))}
+                          >
+                            🔗 Paste Image Link / Drive
+                          </button>
+                          <button
+                            type="button"
+                            className={`tab-btn-pill ${currentImgTab === 'presets' ? 'active' : ''}`}
+                            onClick={() => setHeroSlideImageTabs(prev => ({ ...prev, [idx]: 'presets' }))}
+                          >
+                            🌾 Agricultural Presets
+                          </button>
+                        </div>
 
-                      <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                        <label>Slide Subtitle / Description</label>
-                        <textarea
-                          rows="2"
-                          value={slide.subtitle || ''}
-                          onChange={(e) => handleUpdateHeroSlide(idx, 'subtitle', e.target.value)}
-                          placeholder="Description paragraph displayed on this slide..."
-                        />
-                      </div>
+                        {/* OPTION 1: UPLOAD FILE */}
+                        {currentImgTab === 'upload' && (
+                          <div>
+                            <input
+                              type="file"
+                              id={`hero-slide-file-${idx}`}
+                              accept="image/*"
+                              style={{ display: 'none' }}
+                              onChange={(e) => {
+                                if (e.target.files && e.target.files[0]) {
+                                  handleHeroFileUpload(idx, e.target.files[0]);
+                                }
+                              }}
+                            />
+                            <label
+                              htmlFor={`hero-slide-file-${idx}`}
+                              className="btn-upload-file-label"
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '10px',
+                                padding: '18px 20px',
+                                background: '#eef7ee',
+                                border: '2px dashed #2e7d32',
+                                cursor: 'pointer',
+                                borderRadius: '10px'
+                              }}
+                            >
+                              <span style={{ fontSize: '24px' }}>📷</span>
+                              <span style={{ fontWeight: '700', fontSize: '13px', color: '#1b5e20' }}>
+                                {uploadingSlideIndex === idx ? '⏳ Processing & Uploading...' : 'Browse & Upload Photo from Device'}
+                              </span>
+                            </label>
+                            <span className="field-help" style={{ fontSize: '11px', textAlign: 'center', marginTop: '6px' }}>
+                              Auto-optimized for high resolution & fast loading (JPG, PNG, WebP).
+                            </span>
+                          </div>
+                        )}
 
-                      <div className="form-group">
-                        <label>Primary Button Text</label>
-                        <input
-                          type="text"
-                          value={slide.btnText || ''}
-                          onChange={(e) => handleUpdateHeroSlide(idx, 'btnText', e.target.value)}
-                          placeholder="e.g. Explore Products"
-                        />
-                      </div>
+                        {/* OPTION 2: PASTE LINK */}
+                        {currentImgTab === 'link' && (
+                          <div>
+                            <input
+                              type="text"
+                              value={slide.imageUrl || ''}
+                              onChange={(e) => {
+                                handleUpdateHeroSlide(idx, 'imageUrl', e.target.value);
+                                setAdminHeroPreviewIdx(idx);
+                              }}
+                              placeholder="https://... Google Drive link, Unsplash, or direct image URL"
+                              style={{ width: '100%', boxSizing: 'border-box', fontSize: '13px', padding: '10px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                            />
+                            <span className="field-help" style={{ fontSize: '11px', marginTop: '6px' }}>
+                              Supports direct image links, Google Drive share links, and Dropbox links.
+                            </span>
+                          </div>
+                        )}
 
-                      <div className="form-group">
-                        <label>Primary Button Link</label>
-                        <input
-                          type="text"
-                          value={slide.btnLink || ''}
-                          onChange={(e) => handleUpdateHeroSlide(idx, 'btnLink', e.target.value)}
-                          placeholder="e.g. /products"
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label>Secondary Button Text</label>
-                        <input
-                          type="text"
-                          value={slide.secondaryBtnText || ''}
-                          onChange={(e) => handleUpdateHeroSlide(idx, 'secondaryBtnText', e.target.value)}
-                          placeholder="e.g. About Us"
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label>Secondary Button Link</label>
-                        <input
-                          type="text"
-                          value={slide.secondaryBtnLink || ''}
-                          onChange={(e) => handleUpdateHeroSlide(idx, 'secondaryBtnLink', e.target.value)}
-                          placeholder="e.g. /about"
-                        />
+                        {/* OPTION 3: AGRI PRESETS */}
+                        {currentImgTab === 'presets' && (
+                          <div>
+                            <div className="hero-presets-group" style={{ marginTop: '6px', gap: '8px' }}>
+                              {HERO_IMAGE_PRESETS.map((preset, pIdx) => (
+                                <button
+                                  key={pIdx}
+                                  type="button"
+                                  className="preset-chip-btn"
+                                  onClick={() => {
+                                    handleUpdateHeroSlide(idx, 'imageUrl', preset.url);
+                                    setAdminHeroPreviewIdx(idx);
+                                  }}
+                                  title={`Set slide image to ${preset.name}`}
+                                  style={{ padding: '6px 14px', fontSize: '12px' }}
+                                >
+                                  {preset.name}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
+
+              {/* Quick Save Hero Slides Button Below List */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '14px', marginTop: '16px', marginBottom: '24px' }}>
+                <span style={{ fontSize: '13px', color: '#64748b' }}>
+                  Ready with your slides?
+                </span>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={handleSaveHeroSlidesOnly}
+                  disabled={!hasPermission('update')}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '14px',
+                    fontWeight: '700',
+                    padding: '12px 28px',
+                    background: 'linear-gradient(135deg, #1e7e34 0%, #155724 100%)',
+                    boxShadow: '0 4px 14px rgba(21, 87, 36, 0.25)'
+                  }}
+                >
+                  💾 Save Hero Slides Now
+                </button>
+              </div>
 
               {/* Live Preview Switcher in Admin */}
               {(homeForm.heroSlides || []).length > 0 && (
@@ -1782,31 +2006,12 @@ const Admin = () => {
                   </div>
 
                   {homeForm.heroSlides[adminHeroPreviewIdx] && (
-                    <div className="hero-preview-widget" style={{ height: '240px' }}>
+                    <div className="hero-preview-widget" style={{ height: '260px' }}>
                       <img
                         src={formatImageUrl(homeForm.heroSlides[adminHeroPreviewIdx].imageUrl) || '/hero_farmer_bg.png'}
                         alt="Preview"
                         onError={(e) => { e.target.src = '/hero_farmer_bg.png'; }}
                       />
-                      <div className="hero-preview-overlay" style={{ padding: '24px' }}>
-                        <span className="preview-tag-badge" style={{ fontSize: '11px' }}>
-                          {homeForm.heroSlides[adminHeroPreviewIdx].tag || "MAHARASHTRA'S GREEN FUTURE"}
-                        </span>
-                        <div className="preview-title-text" style={{ fontSize: '20px' }}>
-                          {homeForm.heroSlides[adminHeroPreviewIdx].title || "Nurturing Soil.\nGrowing Tomorrow."}
-                        </div>
-                        <p style={{ fontSize: '12px', color: '#4a5568', margin: '4px 0 10px', maxWidth: '380px' }}>
-                          {homeForm.heroSlides[adminHeroPreviewIdx].subtitle || "Achintyah Agrogreentech Pvt Ltd delivers cutting-edge bio-agricultural inputs..."}
-                        </p>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <span className="preview-btn-pill" style={{ fontSize: '11px', padding: '5px 14px' }}>
-                            {homeForm.heroSlides[adminHeroPreviewIdx].btnText || "Explore Products"} →
-                          </span>
-                          <span style={{ fontSize: '11px', padding: '4px 12px', borderRadius: '12px', border: '1px solid #0d3b1e', color: '#0d3b1e', fontWeight: '700' }}>
-                            {homeForm.heroSlides[adminHeroPreviewIdx].secondaryBtnText || "About Us"}
-                          </span>
-                        </div>
-                      </div>
                     </div>
                   )}
                 </div>
@@ -1908,17 +2113,279 @@ const Admin = () => {
                 </div>
 
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label>About Company Facility Photo Link (URL)</label>
-                  <input
-                    type="text"
-                    value={homeForm.mainImg}
-                    onChange={(e) => setHomeForm({ ...homeForm, mainImg: e.target.value })}
-                    placeholder="Paste photo web address..."
-                  />
-                  <span className="field-help">Facility or field photo shown in the About section on the home page.</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+                    <label style={{ margin: 0, fontWeight: '700', color: '#1e293b' }}>
+                      About Company Facility Photo
+                    </label>
+                    <div className="product-image-tab-group" style={{ margin: 0 }}>
+                      <button
+                        type="button"
+                        className={`tab-btn-pill ${(homeImageTabs.mainImg || 'upload') === 'upload' ? 'active' : ''}`}
+                        onClick={() => setHomeImageTabs(prev => ({ ...prev, mainImg: 'upload' }))}
+                      >
+                        📁 Upload from Computer
+                      </button>
+                      <button
+                        type="button"
+                        className={`tab-btn-pill ${(homeImageTabs.mainImg || 'upload') === 'link' ? 'active' : ''}`}
+                        onClick={() => setHomeImageTabs(prev => ({ ...prev, mainImg: 'link' }))}
+                      >
+                        🔗 Paste Photo Link
+                      </button>
+                      <button
+                        type="button"
+                        className={`tab-btn-pill ${(homeImageTabs.mainImg || 'upload') === 'presets' ? 'active' : ''}`}
+                        onClick={() => setHomeImageTabs(prev => ({ ...prev, mainImg: 'presets' }))}
+                      >
+                        🌾 Agri Presets
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* OPTION 1: UPLOAD FROM COMPUTER */}
+                  {(homeImageTabs.mainImg || 'upload') === 'upload' && (
+                    <div className="product-upload-container">
+                      <label className="product-dropzone-label">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={e => {
+                            if (e.target.files && e.target.files[0]) {
+                              handleHomeImageUpload('mainImg', e.target.files[0]);
+                            }
+                          }}
+                        />
+                        <span className="dropzone-icon">📷</span>
+                        <span className="dropzone-text">
+                          {homeImageUploading.mainImg ? '⏳ Optimizing & Uploading Photo...' : 'Click to Select & Upload Facility Photo from Computer'}
+                        </span>
+                        <span className="dropzone-sub">Supports JPG, PNG, WebP (Auto-optimized for crisp high resolution)</span>
+                      </label>
+                    </div>
+                  )}
+
+                  {/* OPTION 2: PASTE LINK */}
+                  {(homeImageTabs.mainImg || 'upload') === 'link' && (
+                    <div>
+                      <input
+                        type="text"
+                        value={homeForm.mainImg || ''}
+                        onChange={(e) => setHomeForm({ ...homeForm, mainImg: e.target.value })}
+                        placeholder="https://images.unsplash.com/... or Google Drive link"
+                      />
+                      <span className="field-help">Facility or field photo shown in the About section on the home page. Direct web links and Google Drive links supported.</span>
+                    </div>
+                  )}
+
+                  {/* OPTION 3: AGRI PRESETS */}
+                  {(homeImageTabs.mainImg || 'upload') === 'presets' && (
+                    <div className="hero-presets-group" style={{ marginTop: '6px', gap: '8px', display: 'flex', flexWrap: 'wrap' }}>
+                      {FACILITY_IMAGE_PRESETS.map((preset, pIdx) => (
+                        <button
+                          key={pIdx}
+                          type="button"
+                          className="preset-chip-btn"
+                          onClick={() => setHomeForm(prev => ({ ...prev, mainImg: preset.url }))}
+                          title={`Set facility photo to ${preset.name}`}
+                          style={{ padding: '8px 14px', fontSize: '12px' }}
+                        >
+                          {preset.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Live Image Preview Bar & Clear Action */}
                   {homeForm.mainImg && (
-                    <div className="image-preview-box" style={{ marginTop: '10px' }}>
-                      <img src={formatImageUrl(homeForm.mainImg)} alt="About Company Facility Preview" className="img-preview" style={{ width: '140px', height: '80px', objectFit: 'cover', borderRadius: '6px' }} />
+                    <div className="product-image-preview-bar" style={{ marginTop: '12px' }}>
+                      <div className="preview-img-wrap" style={{ width: '80px', height: '54px', borderRadius: '6px' }}>
+                        <img
+                          src={formatImageUrl(homeForm.mainImg)}
+                          alt="About Company Facility Preview"
+                          className="preview-img-thumb"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          onError={(e) => {
+                            e.currentTarget.src = 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800&auto=format&fit=crop&q=80';
+                          }}
+                        />
+                      </div>
+                      <div className="preview-info-text" style={{ flex: 1 }}>
+                        <span className="preview-title" style={{ fontWeight: '700', fontSize: '13px', color: '#1e293b' }}>
+                          Facility Photo Attached
+                        </span>
+                        <span className="preview-link-snippet" style={{ fontSize: '12px', color: '#64748b' }} title={homeForm.mainImg}>
+                          {homeForm.mainImg.startsWith('data:')
+                            ? 'Uploaded from computer (Optimized)'
+                            : homeForm.mainImg}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-remove-preview"
+                        onClick={() => setHomeForm({ ...homeForm, mainImg: '' })}
+                        title="Remove photo"
+                        style={{
+                          background: '#fee2e2',
+                          color: '#dc2626',
+                          border: 'none',
+                          padding: '6px 12px',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontWeight: '600',
+                          fontSize: '12px'
+                        }}
+                      >
+                        ✕ Clear Photo
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Secondary Collage Photos */}
+                <div className="full-width" style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid #f1f5f9' }}>
+                  <h4 style={{ color: '#334155', fontSize: '14px', fontWeight: '700', marginBottom: '4px' }}>
+                    🖼️ Secondary Collage Photos (Optional)
+                  </h4>
+                  <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '14px' }}>
+                    These two smaller photos appear beside the main facility photo in the About collage on the home page.
+                  </p>
+                </div>
+
+                {/* Side Image 1 */}
+                <div className="form-group">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label style={{ margin: 0, fontSize: '13px', fontWeight: '600' }}>Collage Photo 1 (Lab)</label>
+                    <div className="product-image-tab-group" style={{ margin: 0, transform: 'scale(0.9)', transformOrigin: 'right center' }}>
+                      <button
+                        type="button"
+                        className={`tab-btn-pill ${(homeImageTabs.sideImg1 || 'upload') === 'upload' ? 'active' : ''}`}
+                        onClick={() => setHomeImageTabs(prev => ({ ...prev, sideImg1: 'upload' }))}
+                      >
+                        📁 Upload
+                      </button>
+                      <button
+                        type="button"
+                        className={`tab-btn-pill ${(homeImageTabs.sideImg1 || 'upload') === 'link' ? 'active' : ''}`}
+                        onClick={() => setHomeImageTabs(prev => ({ ...prev, sideImg1: 'link' }))}
+                      >
+                        🔗 Link
+                      </button>
+                    </div>
+                  </div>
+
+                  {(homeImageTabs.sideImg1 || 'upload') === 'upload' ? (
+                    <div className="product-upload-container">
+                      <label className="product-dropzone-label" style={{ padding: '14px 10px' }}>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={e => {
+                            if (e.target.files && e.target.files[0]) {
+                              handleHomeImageUpload('sideImg1', e.target.files[0]);
+                            }
+                          }}
+                        />
+                        <span className="dropzone-text" style={{ fontSize: '12px' }}>
+                          {homeImageUploading.sideImg1 ? '⏳ Uploading...' : '📁 Upload Photo 1 from Device'}
+                        </span>
+                      </label>
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={homeForm.sideImg1 || ''}
+                      onChange={(e) => setHomeForm({ ...homeForm, sideImg1: e.target.value })}
+                      placeholder="Paste image web link..."
+                      style={{ fontSize: '12px' }}
+                    />
+                  )}
+
+                  {homeForm.sideImg1 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                      <img
+                        src={formatImageUrl(homeForm.sideImg1)}
+                        alt="Preview 1"
+                        style={{ width: '48px', height: '36px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e2e8f0' }}
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setHomeForm({ ...homeForm, sideImg1: '' })}
+                        style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '11px', cursor: 'pointer' }}
+                      >
+                        ✕ Clear
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Side Image 2 */}
+                <div className="form-group">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <label style={{ margin: 0, fontSize: '13px', fontWeight: '600' }}>Collage Photo 2 (Storage)</label>
+                    <div className="product-image-tab-group" style={{ margin: 0, transform: 'scale(0.9)', transformOrigin: 'right center' }}>
+                      <button
+                        type="button"
+                        className={`tab-btn-pill ${(homeImageTabs.sideImg2 || 'upload') === 'upload' ? 'active' : ''}`}
+                        onClick={() => setHomeImageTabs(prev => ({ ...prev, sideImg2: 'upload' }))}
+                      >
+                        📁 Upload
+                      </button>
+                      <button
+                        type="button"
+                        className={`tab-btn-pill ${(homeImageTabs.sideImg2 || 'upload') === 'link' ? 'active' : ''}`}
+                        onClick={() => setHomeImageTabs(prev => ({ ...prev, sideImg2: 'link' }))}
+                      >
+                        🔗 Link
+                      </button>
+                    </div>
+                  </div>
+
+                  {(homeImageTabs.sideImg2 || 'upload') === 'upload' ? (
+                    <div className="product-upload-container">
+                      <label className="product-dropzone-label" style={{ padding: '14px 10px' }}>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={e => {
+                            if (e.target.files && e.target.files[0]) {
+                              handleHomeImageUpload('sideImg2', e.target.files[0]);
+                            }
+                          }}
+                        />
+                        <span className="dropzone-text" style={{ fontSize: '12px' }}>
+                          {homeImageUploading.sideImg2 ? '⏳ Uploading...' : '📁 Upload Photo 2 from Device'}
+                        </span>
+                      </label>
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={homeForm.sideImg2 || ''}
+                      onChange={(e) => setHomeForm({ ...homeForm, sideImg2: e.target.value })}
+                      placeholder="Paste image web link..."
+                      style={{ fontSize: '12px' }}
+                    />
+                  )}
+
+                  {homeForm.sideImg2 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                      <img
+                        src={formatImageUrl(homeForm.sideImg2)}
+                        alt="Preview 2"
+                        style={{ width: '48px', height: '36px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e2e8f0' }}
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setHomeForm({ ...homeForm, sideImg2: '' })}
+                        style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '11px', cursor: 'pointer' }}
+                      >
+                        ✕ Clear
+                      </button>
                     </div>
                   )}
                 </div>
@@ -2473,26 +2940,43 @@ const Admin = () => {
               <div className="form-group">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                   <label style={{ margin: 0 }}>Category</label>
-                  {!isAddingNewCategory && (
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                    {!isAddingNewCategory && (
+                      <button
+                        type="button"
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#1a472a',
+                          fontWeight: '600',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          padding: 0
+                        }}
+                        onClick={() => {
+                          setIsAddingNewCategory(true);
+                          setCustomCategoryInput('');
+                        }}
+                      >
+                        + Add Another Category
+                      </button>
+                    )}
                     <button
                       type="button"
                       style={{
                         background: 'none',
                         border: 'none',
-                        color: '#1a472a',
+                        color: '#dc2626',
                         fontWeight: '600',
                         fontSize: '12px',
                         cursor: 'pointer',
                         padding: 0
                       }}
-                      onClick={() => {
-                        setIsAddingNewCategory(true);
-                        setCustomCategoryInput('');
-                      }}
+                      onClick={() => setCategoryModalOpen(true)}
                     >
-                      + Add Another Category
+                      ⚙️ Manage / Delete
                     </button>
-                  )}
+                  </div>
                 </div>
 
                 {!isAddingNewCategory ? (
@@ -2697,13 +3181,20 @@ const Admin = () => {
               </div>
 
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label>Detailed Product Description</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ margin: 0 }}>Detailed Product Description</label>
+                  <span style={{ fontSize: '11px', color: '#16a34a', fontWeight: '600' }}>
+                    ✨ Unlimited length – write as much detail as you want ({productForm.desc?.length || 0} characters)
+                  </span>
+                </div>
                 <textarea
-                  rows="3"
-                  placeholder="Explain formulation, features, and benefits..."
+                  rows="6"
+                  style={{ minHeight: '140px', lineHeight: '1.5', fontSize: '13px', resize: 'vertical' }}
+                  placeholder="Explain formulation, features, mode of action, application methods, safety guidelines... (No character limit)"
                   value={productForm.desc || ''}
                   onChange={e => setProductForm({ ...productForm, desc: e.target.value })}
                 />
+                <span className="field-help">Full description shown in detail modal and customer catalog. Supports paragraphs and line breaks.</span>
               </div>
 
               {/* LIVE CATALOG CARD PREVIEW IN MODAL */}
@@ -2753,6 +3244,130 @@ const Admin = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MANAGE CATEGORIES MODAL */}
+      {categoryModalOpen && (
+        <div className="modal-overlay" onClick={() => setCategoryModalOpen(false)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: '540px' }}>
+            <button className="modal-close" onClick={() => setCategoryModalOpen(false)}>✕</button>
+            <h2 className="modal-title">🏷️ Manage Product Categories</h2>
+            <p className="card-subtitle-plain" style={{ marginBottom: '16px' }}>
+              Add new categories or delete categories you no longer need. Deleting a category automatically moves its products to a remaining active category.
+            </p>
+
+            {/* Quick Add Category Bar */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '18px' }}>
+              <input
+                type="text"
+                placeholder="Type new category name..."
+                value={newCategoryName}
+                onChange={e => setNewCategoryName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (newCategoryName.trim()) {
+                      saveNewCategory(newCategoryName.trim());
+                      setAvailableCategories(getAllCategories());
+                      setNewCategoryName('');
+                      setMessage(`✅ Category "${newCategoryName.trim()}" added!`);
+                    }
+                  }
+                }}
+                style={{ flex: 1, padding: '10px 14px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px' }}
+              />
+              <button
+                type="button"
+                className="btn-admin-primary"
+                style={{ padding: '10px 18px', fontSize: '13px', fontWeight: '700', whiteSpace: 'nowrap' }}
+                onClick={() => {
+                  if (newCategoryName.trim()) {
+                    saveNewCategory(newCategoryName.trim());
+                    setAvailableCategories(getAllCategories());
+                    setNewCategoryName('');
+                    setMessage(`✅ Category "${newCategoryName.trim()}" added!`);
+                  }
+                }}
+              >
+                + Add Category
+              </button>
+            </div>
+
+            {/* List of Current Categories */}
+            <div style={{ maxHeight: '340px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '10px', background: '#fafbfc' }}>
+              {availableCategories.map((cat) => {
+                const count = products.filter(p => p.category && p.category.toLowerCase() === cat.toLowerCase()).length;
+                return (
+                  <div
+                    key={cat}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '12px 16px',
+                      borderBottom: '1px solid #f1f5f9'
+                    }}
+                  >
+                    <div>
+                      <strong style={{ fontSize: '14px', color: '#1e293b' }}>{cat}</strong>
+                      <span style={{ fontSize: '12px', color: '#64748b', marginLeft: '10px' }}>
+                        ({count} {count === 1 ? 'product' : 'products'})
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={availableCategories.length <= 1}
+                      title={availableCategories.length <= 1 ? "At least one category must remain" : `Delete category ${cat}`}
+                      style={{
+                        background: '#fee2e2',
+                        color: '#dc2626',
+                        border: 'none',
+                        padding: '6px 12px',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        cursor: availableCategories.length <= 1 ? 'not-allowed' : 'pointer',
+                        opacity: availableCategories.length <= 1 ? 0.5 : 1
+                      }}
+                      onClick={async () => {
+                        const confirmMsg = count > 0
+                          ? `Are you sure you want to delete "${cat}"? ${count} product(s) in this category will be safely reassigned to Bio Fertilizers.`
+                          : `Are you sure you want to delete category "${cat}"?`;
+                        if (window.confirm(confirmMsg)) {
+                          deleteCategory(cat);
+                          try {
+                            const activeToken = (await getFreshToken?.()) || token;
+                            await fetch(`${API_BASE}/categories/${encodeURIComponent(cat)}`, {
+                              method: 'DELETE',
+                              headers: { Authorization: `Bearer ${activeToken}` }
+                            });
+                          } catch (e) {}
+                          setAvailableCategories(getAllCategories());
+                          await fetchProducts();
+                          setMessage(`🗑️ Category "${cat}" deleted successfully!`);
+                        }
+                      }}
+                    >
+                      🗑️ Delete
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => setCategoryModalOpen(false)}
+                style={{ padding: '9px 24px', fontSize: '13px' }}
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}

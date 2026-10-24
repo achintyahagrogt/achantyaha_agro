@@ -159,18 +159,6 @@
       "benefit": "Enhances CEC & water holding",
       "dose": "1–2 kg/acre",
       "crops": "All crops"
-    },
-    {
-      "id": 12,
-      "name": "Achintyah Tricho-Shield",
-      "category": "Bio Pesticides",
-      "icon": "🛡️",
-      "imageUrl": "https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=600&auto=format&fit=crop&q=80",
-      "tag": "New",
-      "desc": "Trichoderma viride + T. harzianum consortium for biological control of soil-borne fungal diseases.",
-      "benefit": "Prevents damping off & wilt",
-      "dose": "1–2 kg/acre (soil drench)",
-      "crops": "Vegetables, Pulses"
     }
   ],
   "inquiries": [
@@ -221,7 +209,7 @@
     "heroSlides": [
       {
         "id": "slide-1",
-        "imageUrl": "/hero_farmer_bg.png",
+        "imageUrl": "http://localhost:5001/uploads/home_img_1_jpg_1792865391915_1vxx.jpg",
         "tag": "MAHARASHTRA'S GREEN FUTURE",
         "title": "Nurturing Soil.\nGrowing Tomorrow.",
         "subtitle": "Achintyah Agrogreentech Pvt Ltd delivers cutting-edge bio-agricultural inputs, organic solutions, and sustainable green technology to empower Indian farmers.",

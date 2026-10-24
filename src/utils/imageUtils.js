@@ -28,5 +28,15 @@ export const formatImageUrl = (url) => {
     return trimmed.replace('www.dropbox.com', 'dl.dropboxusercontent.com').replace(/[?&]dl=0/, '');
   }
 
+  // Pattern 4: Uploaded images served from server in local dev
+  if (trimmed.startsWith('/uploads/')) {
+    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      if (window.location.port !== '5001') {
+        return `http://localhost:5001${trimmed}`;
+      }
+    }
+    return trimmed;
+  }
+
   return trimmed;
 };
