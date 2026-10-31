@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { defaultProducts } from '../data/defaultProducts';
 import { formatImageUrl } from '../utils/imageUtils';
 import { getAllCategories } from '../utils/categoryUtils';
-import { getProducts as fetchCloudProducts, subscribeProducts } from '../services/productService';
+import {
+  getProducts as fetchCloudProducts,
+  subscribeProducts
+} from '../services/productService';
 import './Products.css';
 
 const Products = () => {
   const location = useLocation();
-  const [products, setProducts] = useState(defaultProducts);
-  const [loading, setLoading] = useState(false);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('All');
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null);
@@ -39,45 +41,71 @@ const Products = () => {
     };
   }, [products]);
 
-  useEffect(() => {
-    let isMounted = true;
-    const host = window.location.hostname;
-    const isLocalOrLAN = host === 'localhost' || host === '127.0.0.1' || /^192\.168\./.test(host) || /^10\./.test(host) || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host);
-    const apiHost = isLocalOrLAN ? `http://${host}:5001` : '';
+  // Load and subscribe to Firestore products
+useEffect(() => {
+  let isMounted = true;
 
-    const loadProducts = async () => {
-      try {
-        const { products: cloudList } = await fetchCloudProducts(apiHost);
-        if (isMounted && Array.isArray(cloudList) && cloudList.length > 0) {
-          setProducts(cloudList);
-          setLoading(false);
-        }
-      } catch (err) {
-        console.warn('Initial product load warning:', err.message);
+  const loadProducts = async () => {
+    try {
+      const { products: cloudList } = await fetchCloudProducts();
+
+      if (isMounted) {
+        setProducts(cloudList);
+        setLoading(false);
       }
-    };
 
-    loadProducts();
+    } catch (err) {
+      console.error('Firestore product loading failed:', err);
 
-    // Real-time Firestore subscription: updates on phone and desktop instantly
-    const unsubscribeFirestore = subscribeProducts((realtimeProducts) => {
-      if (isMounted && Array.isArray(realtimeProducts) && realtimeProducts.length > 0) {
+      if (isMounted) {
+        setLoading(false);
+      }
+    }
+  };
+
+  // Initial product loading
+  loadProducts();
+
+  // Real-time Firestore updates
+  const unsubscribeFirestore = subscribeProducts(
+    (realtimeProducts) => {
+      if (isMounted) {
         setProducts(realtimeProducts);
         setLoading(false);
       }
-    });
+    },
+    (error) => {
+      console.error('Firestore subscription failed:', error);
 
-    window.addEventListener('achintyah_products_updated', loadProducts);
-    window.addEventListener('storage', loadProducts);
-    return () => {
-      isMounted = false;
-      if (typeof unsubscribeFirestore === 'function') {
-        unsubscribeFirestore();
+      if (isMounted) {
+        setLoading(false);
       }
-      window.removeEventListener('achintyah_products_updated', loadProducts);
-      window.removeEventListener('storage', loadProducts);
-    };
-  }, []);
+    }
+  );
+
+  // Listen for Admin Panel updates
+  window.addEventListener(
+    'achintyah_products_updated',
+    loadProducts
+  );
+
+  window.addEventListener('storage', loadProducts);
+
+  return () => {
+    isMounted = false;
+
+    if (typeof unsubscribeFirestore === 'function') {
+      unsubscribeFirestore();
+    }
+
+    window.removeEventListener(
+      'achintyah_products_updated',
+      loadProducts
+    );
+
+    window.removeEventListener('storage', loadProducts);
+  };
+}, []);
 
 
   const filtered = products.filter(p => {

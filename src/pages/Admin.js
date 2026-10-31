@@ -230,19 +230,21 @@ const Admin = () => {
     }
   }, [user, navigate]);
 
-  // Fetch Products (Cloud Firestore primary, backend fallback)
-  const fetchProducts = async () => {
-    try {
-      const { products: cloudList } = await fetchCloudProducts(API_BASE);
-      if (Array.isArray(cloudList) && cloudList.length > 0) {
-        setProducts(cloudList);
-        return;
-      }
-    } catch (err) {
-      console.warn('Backend/Cloud products fetch notice:', err);
-    }
-    setProducts([...defaultProducts]);
-  };
+  // Fetch Products ONLY from Cloud Firestore
+const fetchProducts = async () => {
+  try {
+    const { products: cloudList } = await fetchCloudProducts();
+
+    setProducts(cloudList);
+
+  } catch (err) {
+    console.error('Firestore product fetch failed:', err);
+
+    setMessage(
+      `Unable to load products from Firestore: ${err.message}`
+    );
+  }
+};
 
   // Fetch Users (Admin only)
   const fetchUsers = async () => {
@@ -734,93 +736,79 @@ const Admin = () => {
     }
   };
 
-  // Product submit handler (persists atomically to Cloud Firestore)
-  const handleProductSubmit = async (e) => {
-    e.preventDefault();
-    setMessage('');
+  // Product submit handler - Firestore only
+const handleProductSubmit = async (e) => {
+  e.preventDefault();
+  setMessage('');
 
-    if (!productForm.name || !productForm.name.trim()) {
-      alert('Please enter a valid product name.');
-      return;
-    }
+  if (!productForm.name || !productForm.name.trim()) {
+    alert('Please enter a valid product name.');
+    return;
+  }
 
-    // Determine category correctly
-    const chosenCategory = (isAddingNewCategory && customCategoryInput.trim())
-      ? customCategoryInput.trim()
-      : (productForm.category && productForm.category !== '__add_new__' ? productForm.category.trim() : (availableCategories[0] || 'Bio Fertilizers'));
+  const chosenCategory = (
+    isAddingNewCategory && customCategoryInput.trim()
+  )
+    ? customCategoryInput.trim()
+    : (
+        productForm.category &&
+        productForm.category !== '__add_new__'
+      )
+        ? productForm.category.trim()
+        : (availableCategories[0] || 'Bio Fertilizers');
 
-    const formattedProductForm = {
-      ...productForm,
-      name: productForm.name.trim(),
-      category: chosenCategory,
-      imageUrl: formatImageUrl(productForm.imageUrl)
-    };
+  const formattedProductForm = {
+    ...productForm,
+    name: productForm.name.trim(),
+    category: chosenCategory,
+    imageUrl: formatImageUrl(productForm.imageUrl)
+  };
 
+  const isEdit = !!editingProduct;
+
+  try {
+    // Save directly to Firestore
+    const savedProduct = await saveCloudProduct(
+      formattedProductForm,
+      isEdit,
+      editingProduct?.id
+    );
+
+    // Save category only after successful product save
     saveNewCategory(chosenCategory);
     setAvailableCategories(getAllCategories());
 
-    const isEdit = !!editingProduct;
-    const url = isEdit ? `${API_BASE}/products/${editingProduct.id}` : `${API_BASE}/products`;
-    const method = isEdit ? 'PUT' : 'POST';
-
-    let savedProduct = null;
-
-    // 1. Save directly to Cloud Firestore (Single Source of Truth)
-    try {
-      savedProduct = await saveCloudProduct(formattedProductForm, isEdit, editingProduct?.id);
-    } catch (firestoreErr) {
-      console.error('Firestore save error:', firestoreErr);
-      if (firestoreErr.code === 'permission-denied') {
-        alert(
-          '⚠️ Cloud Firestore Permission Notice:\n' +
-          'Security rules in your Firebase Console currently blocked this write.\n\n' +
-          'Please ensure Firestore rules allow admin writes (check console.firebase.google.com).'
-        );
-      }
-    }
-
-    // 2. Also synchronize with Express backend if server is running
-    const activeToken = (await getFreshToken?.()) || token || localStorage.getItem('achintyah_token');
-    try {
-      const res = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${activeToken}`
-        },
-        body: JSON.stringify(formattedProductForm)
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.product) {
-          savedProduct = savedProduct || data.product;
-        }
-      }
-    } catch (backendErr) {
-      console.warn('Backend sync notice:', backendErr.message);
-    }
-
-    if (!savedProduct) {
-      alert('❌ Failed to save product to Cloud Firestore. Please check your internet connection or Firebase Console rules.');
-      return;
-    }
-
-    // Immediately update local state
+    // Update Admin Panel
     setProducts(prev => {
       if (isEdit) {
-        return prev.map(p => String(p.id) === String(savedProduct.id) ? savedProduct : p);
-      } else {
-        return [savedProduct, ...prev.filter(p => String(p.id) !== String(savedProduct.id))];
+        return prev.map(p =>
+          String(p.id) === String(savedProduct.id)
+            ? savedProduct
+            : p
+        );
       }
+
+      return [
+        savedProduct,
+        ...prev.filter(
+          p => String(p.id) !== String(savedProduct.id)
+        )
+      ];
     });
 
-    // Notify all listening components
-    window.dispatchEvent(new Event('achintyah_products_updated'));
-    window.dispatchEvent(new Event('achintyah_categories_updated'));
+    // Notify other components
+    window.dispatchEvent(
+      new Event('achintyah_products_updated')
+    );
+
+    window.dispatchEvent(
+      new Event('achintyah_categories_updated')
+    );
 
     setProductCategoryFilter('All');
     setProductSearch('');
     setHighlightedProductId(savedProduct.id);
+
     setTimeout(() => {
       setHighlightedProductId(null);
     }, 8000);
@@ -829,35 +817,69 @@ const Admin = () => {
     setIsAddingNewCategory(false);
     setCustomCategoryInput('');
 
-    setMessage(isEdit ? '✅ Product updated successfully in Cloud Firestore!' : '✅ New product saved to Cloud Firestore & live on all devices!');
+    setMessage(
+      isEdit
+        ? 'Product updated successfully in Firestore!'
+        : 'New product saved successfully in Firestore!'
+    );
+
+    // Refresh from actual Firestore data
     await fetchProducts();
-  };
 
-  const handleDeleteProduct = async (id) => {
-    if (!window.confirm('Are you sure you want to remove this product from the catalog?')) return;
-    setMessage('');
+  } catch (err) {
+    console.error('Firestore product save failed:', err);
 
-    // 1. Remove from Cloud Firestore
-    try {
-      await deleteCloudProduct(id);
-    } catch (err) {
-      console.warn('Firestore delete notice:', err.message);
-    }
+    alert(
+      `Product was NOT saved to Firestore.\n\nError: ${
+        err.code || err.message
+      }`
+    );
 
-    // 2. Also call backend DELETE if reachable
-    try {
-      const activeToken = (await getFreshToken?.()) || token || localStorage.getItem('achintyah_token');
-      await fetch(`${API_BASE}/products/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${activeToken}` }
-      });
-    } catch (err) {}
+    setMessage(`Firestore save failed: ${err.message}`);
+  }
+};
 
-    setProducts(prev => prev.filter(p => String(p.id) !== String(id)));
-    window.dispatchEvent(new Event('achintyah_products_updated'));
-    setMessage('✅ Product removed from catalog.');
-    fetchProducts();
-  };
+  // Delete product ONLY from Firestore
+const handleDeleteProduct = async (id) => {
+  if (
+    !window.confirm(
+      'Are you sure you want to remove this product from the catalog?'
+    )
+  ) {
+    return;
+  }
+
+  setMessage('');
+
+  try {
+    // Delete from Firestore
+    await deleteCloudProduct(id);
+
+    // Update UI after successful deletion
+    setProducts(prev =>
+      prev.filter(p => String(p.id) !== String(id))
+    );
+
+    window.dispatchEvent(
+      new Event('achintyah_products_updated')
+    );
+
+    setMessage('Product successfully deleted from Firestore.');
+
+    await fetchProducts();
+
+  } catch (err) {
+    console.error('Firestore product deletion failed:', err);
+
+    alert(
+      `Product was NOT deleted from Firestore.\n\nError: ${
+        err.code || err.message
+      }`
+    );
+
+    setMessage(`Firestore delete failed: ${err.message}`);
+  }
+};
 
   const handleSeedFirestore = async () => {
     if (!window.confirm('This will upload all 11 default catalog products to Cloud Firestore so they appear live on all mobile phones & computers. Proceed?')) return;

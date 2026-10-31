@@ -136,51 +136,33 @@ export const uploadProductImage = async (file, userToken = null, apiBase = '') =
 };
 
 /**
- * Fetch all products from Cloud Firestore.
- * Falls back to Express API / defaultProducts if Firestore is empty or unauthorized.
+ * Fetch products exclusively from Cloud Firestore.
+ * Firestore is the single source of truth.
  */
-export const getProducts = async (apiBase = '') => {
-  try {
-    const colRef = collection(db, PRODUCTS_COLLECTION);
-    const snap = await getDocs(query(colRef));
-    if (!snap.empty) {
-      const list = [];
-      snap.forEach(d => {
-        const data = d.data();
-        list.push({
-          ...data,
-          id: d.id,
-          // ensure numerical ID or string ID is consistent
-          displayId: data.id || d.id
-        });
-      });
-      // Sort by creation time or ID
-      list.sort((a, b) => {
-        const timeA = a.createdAt?.seconds || Number(a.id) || 0;
-        const timeB = b.createdAt?.seconds || Number(b.id) || 0;
-        return timeB - timeA;
-      });
-      return { products: list, source: 'firestore' };
-    }
-  } catch (err) {
-    console.warn('[Firestore getProducts Notice]:', err.code || err.message);
-  }
+export const getProducts = async () => {
+  const colRef = collection(db, PRODUCTS_COLLECTION);
+  const snap = await getDocs(colRef);
 
-  // Fallback: Check backend Express server
-  if (apiBase) {
-    try {
-      const res = await fetch(`${apiBase}/products`);
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          return { products: data, source: 'express' };
-        }
-      }
-    } catch (e) {}
-  }
+  const list = snap.docs.map(d => {
+    const data = d.data();
 
-  // Fallback: defaultProducts catalog
-  return { products: [...defaultProducts], source: 'defaults' };
+    return {
+      ...data,
+      id: d.id,
+      displayId: data.id || d.id
+    };
+  });
+
+  list.sort((a, b) => {
+    const timeA = a.createdAt?.seconds || 0;
+    const timeB = b.createdAt?.seconds || 0;
+    return timeB - timeA;
+  });
+
+  return {
+    products: list,
+    source: 'firestore'
+  };
 };
 
 /**
