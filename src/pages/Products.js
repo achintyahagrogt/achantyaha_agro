@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { defaultProducts } from '../data/defaultProducts';
 import { formatImageUrl } from '../utils/imageUtils';
 import { getAllCategories } from '../utils/categoryUtils';
+import { getProducts as fetchCloudProducts, subscribeProducts } from '../services/productService';
 import './Products.css';
 
 const Products = () => {
@@ -40,57 +41,44 @@ const Products = () => {
 
   useEffect(() => {
     let isMounted = true;
-    const apiHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-      ? 'http://localhost:5001' 
-      : '';
-    
+    const host = window.location.hostname;
+    const isLocalOrLAN = host === 'localhost' || host === '127.0.0.1' || /^192\.168\./.test(host) || /^10\./.test(host) || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host);
+    const apiHost = isLocalOrLAN ? `http://${host}:5001` : '';
+
     const loadProducts = async () => {
-      let list = [];
       try {
-        const res = await fetch(`${apiHost}/api/products`);
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
-            list = data;
-          }
+        const { products: cloudList } = await fetchCloudProducts(apiHost);
+        if (isMounted && Array.isArray(cloudList) && cloudList.length > 0) {
+          setProducts(cloudList);
+          setLoading(false);
         }
       } catch (err) {
-        console.warn('Backend API unreachable or offline, using fallback catalog:', err.message);
-      }
-
-      if (list.length === 0) {
-        list = [...defaultProducts];
-      }
-
-      // Merge custom/edited products saved in LocalStorage fallback
-      try {
-        const localProds = JSON.parse(localStorage.getItem('achintyah_products') || '[]');
-        localProds.forEach(lp => {
-          const idx = list.findIndex(p => String(p.id) === String(lp.id));
-          if (idx !== -1) {
-            list[idx] = lp;
-          } else {
-            list.unshift(lp);
-          }
-        });
-      } catch (e) {}
-
-      if (isMounted) {
-        setProducts(list);
-        setLoading(false);
+        console.warn('Initial product load warning:', err.message);
       }
     };
 
     loadProducts();
 
+    // Real-time Firestore subscription: updates on phone and desktop instantly
+    const unsubscribeFirestore = subscribeProducts((realtimeProducts) => {
+      if (isMounted && Array.isArray(realtimeProducts) && realtimeProducts.length > 0) {
+        setProducts(realtimeProducts);
+        setLoading(false);
+      }
+    });
+
     window.addEventListener('achintyah_products_updated', loadProducts);
     window.addEventListener('storage', loadProducts);
     return () => {
       isMounted = false;
+      if (typeof unsubscribeFirestore === 'function') {
+        unsubscribeFirestore();
+      }
       window.removeEventListener('achintyah_products_updated', loadProducts);
       window.removeEventListener('storage', loadProducts);
     };
   }, []);
+
 
   const filtered = products.filter(p => {
     const matchCat = activeCategory === 'All' || 
