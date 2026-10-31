@@ -2,6 +2,7 @@
   "name": "achintyah-agrogreentech",
   "version": "1.0.0",
   "private": true,
+  "proxy": "http://localhost:5001",
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",

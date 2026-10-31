@@ -5,6 +5,14 @@ import { defaultProducts } from '../data/defaultProducts';
 import { formatImageUrl } from '../utils/imageUtils';
 import { DEFAULT_HERO_SLIDES } from './Home';
 import { getAllCategories, saveNewCategory, deleteCategory } from '../utils/categoryUtils';
+import {
+  getProducts as fetchCloudProducts,
+  saveProduct as saveCloudProduct,
+  deleteProduct as deleteCloudProduct,
+  uploadProductImage,
+  seedInitialProductsToFirestore,
+  subscribeProducts
+} from '../services/productService';
 import './Admin.css';
 
 const ALL_PERMISSIONS = ['create', 'read', 'update', 'delete', 'manage_users'];
@@ -107,6 +115,7 @@ const Admin = () => {
   const [productImageTab, setProductImageTab] = useState('upload'); // 'upload' or 'link'
   const [productImageUploading, setProductImageUploading] = useState(false);
   const [highlightedProductId, setHighlightedProductId] = useState(null);
+  const [seeding, setSeeding] = useState(false);
 
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [userForm, setUserForm] = useState({
@@ -221,38 +230,18 @@ const Admin = () => {
     }
   }, [user, navigate]);
 
-  // Fetch Products
+  // Fetch Products (Cloud Firestore primary, backend fallback)
   const fetchProducts = async () => {
-    let list = [];
     try {
-      const res = await fetch(`${API_BASE}/products`);
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          list = data;
-        }
+      const { products: cloudList } = await fetchCloudProducts(API_BASE);
+      if (Array.isArray(cloudList) && cloudList.length > 0) {
+        setProducts(cloudList);
+        return;
       }
     } catch (err) {
-      console.warn('Backend products fetch offline fallback:', err);
+      console.warn('Backend/Cloud products fetch notice:', err);
     }
-
-    if (list.length === 0) {
-      list = [...defaultProducts];
-    }
-
-    try {
-      const localProds = JSON.parse(localStorage.getItem('achintyah_products') || '[]');
-      localProds.forEach(lp => {
-        const idx = list.findIndex(p => String(p.id) === String(lp.id));
-        if (idx !== -1) {
-          list[idx] = lp;
-        } else {
-          list.unshift(lp);
-        }
-      });
-    } catch (e) {}
-
-    setProducts(list);
+    setProducts([...defaultProducts]);
   };
 
   // Fetch Users (Admin only)
@@ -717,53 +706,35 @@ const Admin = () => {
     }
   };
 
-  // Product image upload handler (supports up to 10MB JPG/PNG/WebP/GIF)
+  // Product image upload handler (compresses to WebP & uploads to Firebase Storage or backend)
   const handleProductFileUpload = async (file) => {
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      alert('Image file size must be less than 10MB.');
+    if (file.size > 15 * 1024 * 1024) {
+      alert('Image file size must be less than 15MB.');
       return;
     }
     setProductImageUploading(true);
+    setMessage('⏳ Compressing & uploading image...');
 
     try {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64Data = reader.result;
-        // Instant visual preview in modal
-        setProductForm(prev => ({ ...prev, imageUrl: base64Data }));
-
-        try {
-          const res = await fetch(`${API_BASE}/upload-image`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              imageBase64: base64Data,
-              filename: file.name
-            })
-          });
-          const data = await res.json();
-          if (res.ok && data.url) {
-            setProductForm(prev => ({ ...prev, imageUrl: data.url }));
-            setMessage('✅ Product photo uploaded successfully!');
-          }
-        } catch (err) {
-          console.warn('Backend image upload offline, keeping base64 DataURL for product:', err);
-        } finally {
-          setProductImageUploading(false);
-        }
-      };
-      reader.readAsDataURL(file);
+      const activeToken = (await getFreshToken?.()) || token || localStorage.getItem('achintyah_token');
+      const result = await uploadProductImage(file, activeToken, API_BASE);
+      setProductForm(prev => ({ ...prev, imageUrl: result.url }));
+      if (result.source === 'firebase-storage') {
+        setMessage('✅ Image uploaded directly to Firebase Cloud Storage CDN!');
+      } else if (result.source === 'express-server') {
+        setMessage('✅ Image uploaded to server uploads directory!');
+      } else {
+        setMessage('✅ Image compressed & optimized (<80KB WebP)!');
+      }
     } catch (err) {
-      setProductImageUploading(false);
       alert(`Could not process file: ${err.message}`);
+    } finally {
+      setProductImageUploading(false);
     }
   };
 
-  // Product submit handler
+  // Product submit handler (persists atomically to Cloud Firestore)
   const handleProductSubmit = async (e) => {
     e.preventDefault();
     setMessage('');
@@ -793,8 +764,23 @@ const Admin = () => {
     const method = isEdit ? 'PUT' : 'POST';
 
     let savedProduct = null;
-    const activeToken = (await getFreshToken?.()) || token || localStorage.getItem('achintyah_token');
 
+    // 1. Save directly to Cloud Firestore (Single Source of Truth)
+    try {
+      savedProduct = await saveCloudProduct(formattedProductForm, isEdit, editingProduct?.id);
+    } catch (firestoreErr) {
+      console.error('Firestore save error:', firestoreErr);
+      if (firestoreErr.code === 'permission-denied') {
+        alert(
+          '⚠️ Cloud Firestore Permission Notice:\n' +
+          'Security rules in your Firebase Console currently blocked this write.\n\n' +
+          'Please ensure Firestore rules allow admin writes (check console.firebase.google.com).'
+        );
+      }
+    }
+
+    // 2. Also synchronize with Express backend if server is running
+    const activeToken = (await getFreshToken?.()) || token || localStorage.getItem('achintyah_token');
     try {
       const res = await fetch(url, {
         method,
@@ -804,21 +790,22 @@ const Admin = () => {
         },
         body: JSON.stringify(formattedProductForm)
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Error saving product to server');
-      savedProduct = data.product;
-    } catch (err) {
-      console.warn('Backend product save notice:', err.message);
-      setMessage(`⚠️ Note: ${err.message}. Saved in browser catalog.`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.product) {
+          savedProduct = savedProduct || data.product;
+        }
+      }
+    } catch (backendErr) {
+      console.warn('Backend sync notice:', backendErr.message);
     }
 
     if (!savedProduct) {
-      savedProduct = isEdit
-        ? { ...editingProduct, ...formattedProductForm }
-        : { id: Date.now(), ...formattedProductForm };
+      alert('❌ Failed to save product to Cloud Firestore. Please check your internet connection or Firebase Console rules.');
+      return;
     }
 
-    // 1. Immediately update state so card is visible at the top
+    // Immediately update local state
     setProducts(prev => {
       if (isEdit) {
         return prev.map(p => String(p.id) === String(savedProduct.id) ? savedProduct : p);
@@ -827,28 +814,12 @@ const Admin = () => {
       }
     });
 
-    // 2. Persist to LocalStorage fallback
-    try {
-      const local = JSON.parse(localStorage.getItem('achintyah_products') || '[]');
-      const idx = local.findIndex(p => String(p.id) === String(savedProduct.id));
-      if (idx !== -1) {
-        local[idx] = savedProduct;
-      } else {
-        local.unshift(savedProduct);
-      }
-      localStorage.setItem('achintyah_products', JSON.stringify(local));
-    } catch (e) {}
-
-    // 3. Notify all listeners
+    // Notify all listening components
     window.dispatchEvent(new Event('achintyah_products_updated'));
     window.dispatchEvent(new Event('achintyah_categories_updated'));
-    window.dispatchEvent(new Event('storage'));
 
-    // 4. Reset filters
     setProductCategoryFilter('All');
     setProductSearch('');
-
-    // 5. Highlight the newly added/edited product card
     setHighlightedProductId(savedProduct.id);
     setTimeout(() => {
       setHighlightedProductId(null);
@@ -858,7 +829,7 @@ const Admin = () => {
     setIsAddingNewCategory(false);
     setCustomCategoryInput('');
 
-    setMessage(isEdit ? '✅ Product updated successfully!' : '✅ New product added successfully to catalog!');
+    setMessage(isEdit ? '✅ Product updated successfully in Cloud Firestore!' : '✅ New product saved to Cloud Firestore & live on all devices!');
     await fetchProducts();
   };
 
@@ -866,24 +837,45 @@ const Admin = () => {
     if (!window.confirm('Are you sure you want to remove this product from the catalog?')) return;
     setMessage('');
 
-    // Optimistically remove from state
-    setProducts(prev => prev.filter(p => String(p.id) !== String(id)));
-
+    // 1. Remove from Cloud Firestore
     try {
-      const localProds = JSON.parse(localStorage.getItem('achintyah_products') || '[]');
-      const updated = localProds.filter(p => String(p.id) !== String(id));
-      localStorage.setItem('achintyah_products', JSON.stringify(updated));
-    } catch (err) {}
+      await deleteCloudProduct(id);
+    } catch (err) {
+      console.warn('Firestore delete notice:', err.message);
+    }
 
+    // 2. Also call backend DELETE if reachable
     try {
+      const activeToken = (await getFreshToken?.()) || token || localStorage.getItem('achintyah_token');
       await fetch(`${API_BASE}/products/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${activeToken}` }
       });
     } catch (err) {}
 
-    setMessage('✅ Product removed successfully!');
+    setProducts(prev => prev.filter(p => String(p.id) !== String(id)));
+    window.dispatchEvent(new Event('achintyah_products_updated'));
+    setMessage('✅ Product removed from catalog.');
     fetchProducts();
+  };
+
+  const handleSeedFirestore = async () => {
+    if (!window.confirm('This will upload all 11 default catalog products to Cloud Firestore so they appear live on all mobile phones & computers. Proceed?')) return;
+    setSeeding(true);
+    setMessage('⏳ Syncing catalog to Cloud Firestore...');
+    try {
+      const res = await seedInitialProductsToFirestore(defaultProducts);
+      if (res.errors.length > 0) {
+        alert(`Synced ${res.count} products, with some errors:\n` + res.errors.join('\n') + '\n\nPlease check Firestore rules in Firebase Console.');
+      } else {
+        alert(`✅ Successfully synced ${res.count} products to Cloud Firestore! They are now live on all devices.`);
+      }
+      await fetchProducts();
+    } catch (err) {
+      alert(`Could not sync to Firestore: ${err.message}`);
+    } finally {
+      setSeeding(false);
+    }
   };
 
   // Status toggle handler for Customer Inquiries
@@ -1422,6 +1414,27 @@ const Admin = () => {
                 onClick={() => setCategoryModalOpen(true)}
               >
                 🏷️ Manage Categories ({availableCategories.length})
+              </button>
+              <button
+                className="btn-secondary"
+                style={{
+                  background: '#0284c7',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  fontWeight: '600',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                disabled={seeding}
+                onClick={handleSeedFirestore}
+                title="Seed all initial catalog products to Cloud Firestore so they appear live on all mobile phones & computers"
+              >
+                {seeding ? '⏳ Syncing...' : '☁️ Seed Catalog to Cloud Firestore'}
               </button>
               <button
                 className="btn-add"

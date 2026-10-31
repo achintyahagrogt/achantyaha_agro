@@ -30,13 +30,32 @@ export const formatImageUrl = (url) => {
 
   // Pattern 4: Uploaded images served from server in local dev
   if (trimmed.startsWith('/uploads/')) {
-    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-      if (window.location.port !== '5001') {
-        return `http://localhost:5001${trimmed}`;
+    if (typeof window !== 'undefined') {
+      const host = window.location.hostname;
+      const isLocalOrLAN = host === 'localhost' || host === '127.0.0.1' || /^192\.168\./.test(host) || /^10\./.test(host) || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host);
+      if (isLocalOrLAN && window.location.port !== '5001') {
+        return `http://${host}:5001${trimmed}`;
       }
     }
     return trimmed;
   }
 
+  // Pattern 5: Hardcoded localhost in stored URLs accessed from a phone/LAN device
+  if (trimmed.includes('localhost:5001/uploads/') || trimmed.includes('127.0.0.1:5001/uploads/')) {
+    if (typeof window !== 'undefined') {
+      const host = window.location.hostname;
+      if (host !== 'localhost' && host !== '127.0.0.1') {
+        // Replace localhost with actual device hostname (e.g., 192.168.1.x) or relative path
+        const isLAN = /^192\.168\./.test(host) || /^10\./.test(host) || /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host);
+        if (isLAN) {
+          return trimmed.replace(/(?:localhost|127\.0\.0\.1):5001/, `${host}:5001`);
+        }
+        // In cloud/production, strip localhost:5001 to relative path
+        return trimmed.replace(/^http:\/\/(?:localhost|127\.0\.0\.1):5001/, '');
+      }
+    }
+  }
+
   return trimmed;
 };
+
