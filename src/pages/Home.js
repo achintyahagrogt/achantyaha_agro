@@ -2,14 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { formatImageUrl } from '../utils/imageUtils';
-import { getAllCategories, getCategoryMeta } from '../utils/categoryUtils';
+import { getAllCategories, getCategoryMeta, subscribeCategories } from '../utils/categoryUtils';
 import './Home.css';
 
 export const DEFAULT_HERO_SLIDES = [
-  {
-    id: "slide-1",
-    imageUrl: "/hero_farmer_bg.png"
-  },
+ 
   {
     id: "slide-2",
     imageUrl: "https://images.unsplash.com/photo-1592982537447-7440770cbfc9?w=1600&auto=format&fit=crop&q=80"
@@ -149,17 +146,15 @@ const Home = () => {
 
   const [categoriesList, setCategoriesList] = useState(() => getAllCategories());
 
-  useEffect(() => {
-    const handleCatUpdate = () => {
-      setCategoriesList(getAllCategories());
-    };
-    window.addEventListener('achintyah_categories_updated', handleCatUpdate);
-    window.addEventListener('storage', handleCatUpdate);
-    return () => {
-      window.removeEventListener('achintyah_categories_updated', handleCatUpdate);
-      window.removeEventListener('storage', handleCatUpdate);
-    };
-  }, []);
+useEffect(() => {
+  const unsubscribe = subscribeCategories(setCategoriesList);
+
+  return () => {
+    if (typeof unsubscribe === 'function') {
+      unsubscribe();
+    }
+  };
+}, []);
 
   const heroSlides = Array.isArray(content.heroSlides) && content.heroSlides.length > 0
     ? content.heroSlides

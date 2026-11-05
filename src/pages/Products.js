@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { formatImageUrl } from '../utils/imageUtils';
-import { getAllCategories } from '../utils/categoryUtils';
+import { getAllCategories, subscribeCategories } from '../utils/categoryUtils';
 import {
   getProducts as fetchCloudProducts,
   subscribeProducts
@@ -28,16 +28,15 @@ const Products = () => {
 
   // Keep category list updated dynamically
   useEffect(() => {
-    const updateCats = () => {
-      setAllCategories(['All', ...getAllCategories(products)]);
-    };
-    updateCats();
-
-    window.addEventListener('achintyah_categories_updated', updateCats);
-    window.addEventListener('storage', updateCats);
+    const unsubscribe = subscribeCategories(
+      categories => setAllCategories(['All', ...categories]),
+      products
+    );
+  
     return () => {
-      window.removeEventListener('achintyah_categories_updated', updateCats);
-      window.removeEventListener('storage', updateCats);
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
     };
   }, [products]);
 

@@ -4,7 +4,12 @@ import { useNavigate, Link } from 'react-router-dom';
 import { defaultProducts } from '../data/defaultProducts';
 import { formatImageUrl } from '../utils/imageUtils';
 import { DEFAULT_HERO_SLIDES } from './Home';
-import { getAllCategories, saveNewCategory, deleteCategory } from '../utils/categoryUtils';
+import {
+  getAllCategories,
+  saveNewCategory,
+  deleteCategory,
+  subscribeCategories
+} from '../utils/categoryUtils';
 import {
   getProducts as fetchCloudProducts,
   saveProduct as saveCloudProduct,
@@ -100,14 +105,12 @@ const Admin = () => {
   const [newCategoryName, setNewCategoryName] = useState('');
 
   useEffect(() => {
-    const handleCatUpdate = () => {
-      setAvailableCategories(getAllCategories());
-    };
-    window.addEventListener('achintyah_categories_updated', handleCatUpdate);
-    window.addEventListener('storage', handleCatUpdate);
+    const unsubscribe = subscribeCategories(setAvailableCategories);
+  
     return () => {
-      window.removeEventListener('achintyah_categories_updated', handleCatUpdate);
-      window.removeEventListener('storage', handleCatUpdate);
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
     };
   }, []);
 
@@ -775,8 +778,7 @@ const handleProductSubmit = async (e) => {
     );
 
     // Save category only after successful product save
-    saveNewCategory(chosenCategory);
-    setAvailableCategories(getAllCategories());
+    await saveNewCategory(chosenCategory);
 
     // Update Admin Panel
     setProducts(prev => {
@@ -3048,13 +3050,19 @@ const handleDeleteProduct = async (id) => {
                       type="button"
                       className="btn-admin-primary"
                       style={{ padding: '8px 12px', fontSize: '12px', whiteSpace: 'nowrap' }}
-                      onClick={() => {
+                      onClick={async () => {
                         const trimmed = customCategoryInput.trim();
+                      
                         if (trimmed) {
-                          saveNewCategory(trimmed);
-                          setAvailableCategories(getAllCategories());
-                          setProductForm({ ...productForm, category: trimmed });
-                          setIsAddingNewCategory(false);
+                          try {
+                            await saveNewCategory(trimmed);
+                            setProductForm(prev => ({ ...prev, category: trimmed }));
+                            setIsAddingNewCategory(false);
+                            setMessage(`Category "${trimmed}" added successfully!`);
+                          } catch (error) {
+                            console.error('Category save failed:', error);
+                            alert(`Could not save category: ${error.message}`);
+                          }
                         }
                       }}
                     >
@@ -3295,34 +3303,35 @@ const handleDeleteProduct = async (id) => {
 
             {/* Quick Add Category Bar */}
             <div style={{ display: 'flex', gap: '8px', marginBottom: '18px' }}>
-              <input
-                type="text"
-                placeholder="Type new category name..."
-                value={newCategoryName}
-                onChange={e => setNewCategoryName(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    if (newCategoryName.trim()) {
-                      saveNewCategory(newCategoryName.trim());
-                      setAvailableCategories(getAllCategories());
-                      setNewCategoryName('');
-                      setMessage(`✅ Category "${newCategoryName.trim()}" added!`);
-                    }
+             onKeyDown={async e => {
+                if (e.key === 'Enter' && newCategoryName.trim()) {
+                  try {
+                    const name = newCategoryName.trim();
+                    await saveNewCategory(name);
+                    setNewCategoryName('');
+                    setMessage(`Category "${name}" added successfully!`);
+                  } catch (error) {
+                    console.error('Category save failed:', error);
+                    alert(`Could not save category: ${error.message}`);
                   }
-                }}
-                style={{ flex: 1, padding: '10px 14px', borderRadius: '8px', border: '1.5px solid #cbd5e1', fontSize: '13px' }}
-              />
+                }
+              }}
+  
               <button
                 type="button"
                 className="btn-admin-primary"
                 style={{ padding: '10px 18px', fontSize: '13px', fontWeight: '700', whiteSpace: 'nowrap' }}
-                onClick={() => {
-                  if (newCategoryName.trim()) {
-                    saveNewCategory(newCategoryName.trim());
-                    setAvailableCategories(getAllCategories());
+                onClick={async () => {
+                  if (!newCategoryName.trim()) return;
+                
+                  try {
+                    const name = newCategoryName.trim();
+                    await saveNewCategory(name);
                     setNewCategoryName('');
-                    setMessage(`✅ Category "${newCategoryName.trim()}" added!`);
+                    setMessage(`Category "${name}" added successfully!`);
+                  } catch (error) {
+                    console.error('Category save failed:', error);
+                    alert(`Could not save category: ${error.message}`);
                   }
                 }}
               >
@@ -3372,7 +3381,7 @@ const handleDeleteProduct = async (id) => {
                           ? `Are you sure you want to delete "${cat}"? ${count} product(s) in this category will be safely reassigned to Bio Fertilizers.`
                           : `Are you sure you want to delete category "${cat}"?`;
                         if (window.confirm(confirmMsg)) {
-                          deleteCategory(cat);
+                          await deleteCategory(cat);
                           try {
                             const activeToken = (await getFreshToken?.()) || token;
                             await fetch(`${API_BASE}/categories/${encodeURIComponent(cat)}`, {

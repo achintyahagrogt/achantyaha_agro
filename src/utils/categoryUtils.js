@@ -1,3 +1,16 @@
+
+import {
+  collection,
+  doc,
+  getDocs,
+  setDoc,
+  updateDoc,
+  onSnapshot,
+  serverTimestamp
+} from 'firebase/firestore';
+
+import { db } from '../firebase';
+
 export const DEFAULT_CATEGORY_DATA = [
   {
     title: 'Bio Fertilizers',
@@ -33,165 +46,215 @@ export const DEFAULT_CATEGORY_DATA = [
 
 export const DEFAULT_CATEGORIES = DEFAULT_CATEGORY_DATA.map(c => c.title);
 
-/**
- * Gets all available categories, combining defaults, custom stored categories,
- * and any categories present in products, while respecting deleted categories.
- */
-export const getAllCategories = (extraProducts = []) => {
-  let deletedList = [];
-  try {
-    const rawDeleted = localStorage.getItem('achintyah_deleted_categories');
-    if (rawDeleted) {
-      deletedList = JSON.parse(rawDeleted).map(c => (typeof c === 'string' ? c.trim().toLowerCase() : ''));
-    }
-  } catch (e) {}
+const CATEGORIES_COLLECTION = 'categories';
+const PRODUCTS_COLLECTION = 'products';
 
-  const catSet = new Set();
-  DEFAULT_CATEGORIES.forEach(c => {
-    if (!deletedList.includes(c.toLowerCase())) {
-      catSet.add(c);
-    }
+const normalize = value => String(value || '').trim().toLowerCase();
+
+const categoryId = name => encodeURIComponent(normalize(name));
+
+const notifyCategoryUpdate = () => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('achintyah_categories_updated'));
+  }
+};
+
+export const getAllCategories = (extraProducts = []) => {
+  const categories = new Map();
+
+  DEFAULT_CATEGORIES.forEach(name => {
+    categories.set(normalize(name), name);
   });
 
-  // 1. Stored custom categories
+  // Temporary legacy fallback for older browser data.
+  // Firestore subscription will provide the shared category list.
   try {
-    const saved = localStorage.getItem('achintyah_categories');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) {
-        parsed.forEach(c => {
-          if (c && typeof c === 'string' && c.trim() && !deletedList.includes(c.trim().toLowerCase())) {
-            catSet.add(c.trim());
-          }
-        });
-      }
-    }
-  } catch (e) {}
+    const saved = JSON.parse(
+      localStorage.getItem('achintyah_categories') || '[]'
+    );
 
-  // 2. Categories from products passed in
+    if (Array.isArray(saved)) {
+      saved.forEach(name => {
+        if (typeof name === 'string' && name.trim()) {
+          categories.set(normalize(name), name.trim());
+        }
+      });
+    }
+  } catch (error) {}
+
   if (Array.isArray(extraProducts)) {
-    extraProducts.forEach(p => {
-      if (p && p.category && typeof p.category === 'string' && p.category.trim() && !deletedList.includes(p.category.trim().toLowerCase())) {
-        catSet.add(p.category.trim());
+    extraProducts.forEach(product => {
+      if (product?.category?.trim()) {
+        categories.set(
+          normalize(product.category),
+          product.category.trim()
+        );
       }
     });
   }
 
-  // 3. Categories from products in localStorage
-  try {
-    const localProds = JSON.parse(localStorage.getItem('achintyah_products') || '[]');
-    if (Array.isArray(localProds)) {
-      localProds.forEach(p => {
-        if (p && p.category && typeof p.category === 'string' && p.category.trim() && !deletedList.includes(p.category.trim().toLowerCase())) {
-          catSet.add(p.category.trim());
+  return Array.from(categories.values());
+};
+
+/**
+ * Real-time shared category list from Firestore.
+ * Documents with active:false are deletion records (tombstones).
+ */
+export const subscribeCategories = (callback, extraProducts = []) => {
+  return onSnapshot(
+    collection(db, CATEGORIES_COLLECTION),
+    snapshot => {
+      const active = new Map();
+      const deleted = new Set();
+
+      snapshot.forEach(categoryDoc => {
+        const data = categoryDoc.data();
+        const name = String(data.name || '').trim();
+
+        if (!name) return;
+
+        if (data.active === false) {
+          deleted.add(normalize(name));
+        } else {
+          active.set(normalize(name), name);
         }
       });
-    }
-  } catch (e) {}
 
-  const result = Array.from(catSet);
-  if (result.length === 0) {
-    result.push('Bio Fertilizers');
-  }
-  return result;
-};
+      const categories = new Map();
 
-/**
- * Save a new category to storage and notify any listening components
- */
-export const saveNewCategory = (categoryName) => {
-  if (!categoryName || typeof categoryName !== 'string') return;
-  const trimmed = categoryName.trim();
-  if (!trimmed) return;
-
-  // 1. Remove from deleted categories list if previously deleted
-  try {
-    const rawDeleted = localStorage.getItem('achintyah_deleted_categories');
-    if (rawDeleted) {
-      const deleted = JSON.parse(rawDeleted);
-      if (Array.isArray(deleted)) {
-        const filtered = deleted.filter(c => typeof c === 'string' && c.trim().toLowerCase() !== trimmed.toLowerCase());
-        localStorage.setItem('achintyah_deleted_categories', JSON.stringify(filtered));
-      }
-    }
-  } catch (e) {}
-
-  // 2. Add to custom categories
-  const current = getAllCategories();
-  if (!current.map(c => c.toLowerCase()).includes(trimmed.toLowerCase())) {
-    current.push(trimmed);
-  }
-
-  try {
-    localStorage.setItem('achintyah_categories', JSON.stringify(current));
-    window.dispatchEvent(new Event('achintyah_categories_updated'));
-    window.dispatchEvent(new Event('storage'));
-  } catch (e) {}
-};
-
-/**
- * Delete a category from available categories and reassign affected products
- */
-export const deleteCategory = (categoryName) => {
-  if (!categoryName || typeof categoryName !== 'string') return;
-  const target = categoryName.trim();
-  if (!target) return;
-
-  // 1. Add to deleted categories list
-  try {
-    const rawDeleted = localStorage.getItem('achintyah_deleted_categories');
-    const deleted = rawDeleted ? JSON.parse(rawDeleted) : [];
-    if (!deleted.map(c => (typeof c === 'string' ? c.trim().toLowerCase() : '')).includes(target.toLowerCase())) {
-      deleted.push(target);
-      localStorage.setItem('achintyah_deleted_categories', JSON.stringify(deleted));
-    }
-  } catch (e) {}
-
-  // 2. Remove from custom categories list
-  try {
-    const rawCustom = localStorage.getItem('achintyah_categories');
-    if (rawCustom) {
-      const custom = JSON.parse(rawCustom);
-      if (Array.isArray(custom)) {
-        const filtered = custom.filter(c => typeof c === 'string' && c.trim().toLowerCase() !== target.toLowerCase());
-        localStorage.setItem('achintyah_categories', JSON.stringify(filtered));
-      }
-    }
-  } catch (e) {}
-
-  // 3. Reassign any products in localStorage using this category to a remaining category
-  const remaining = getAllCategories().filter(c => c.toLowerCase() !== target.toLowerCase());
-  const fallbackCat = remaining[0] || 'Bio Fertilizers';
-
-  try {
-    const rawProds = localStorage.getItem('achintyah_products');
-    if (rawProds) {
-      const prods = JSON.parse(rawProds);
-      let changed = false;
-      prods.forEach(p => {
-        if (p.category && p.category.trim().toLowerCase() === target.toLowerCase()) {
-          p.category = fallbackCat;
-          changed = true;
+      DEFAULT_CATEGORIES.forEach(name => {
+        if (!deleted.has(normalize(name))) {
+          categories.set(normalize(name), name);
         }
       });
-      if (changed) {
-        localStorage.setItem('achintyah_products', JSON.stringify(prods));
+
+      active.forEach((name, key) => {
+        if (!deleted.has(key)) {
+          categories.set(key, name);
+        }
+      });
+
+      if (Array.isArray(extraProducts)) {
+        extraProducts.forEach(product => {
+          const name = product?.category?.trim();
+          if (name && !deleted.has(normalize(name))) {
+            categories.set(normalize(name), name);
+          }
+        });
       }
+
+      callback(Array.from(categories.values()));
+    },
+    error => {
+      console.error('Category subscription error:', error);
+      callback(getAllCategories(extraProducts));
     }
-  } catch (e) {}
-
-  window.dispatchEvent(new Event('achintyah_categories_updated'));
-  window.dispatchEvent(new Event('achintyah_products_updated'));
-  window.dispatchEvent(new Event('storage'));
-};
-
-/**
- * Get display metadata (icon, description) for a category
- */
-export const getCategoryMeta = (categoryName) => {
-  const found = DEFAULT_CATEGORY_DATA.find(
-    c => c.title.toLowerCase() === (categoryName || '').toLowerCase()
   );
+};
+
+/**
+ * Add or reactivate a category in Firestore.
+ */
+export const saveNewCategory = async categoryName => {
+  if (typeof categoryName !== 'string' || !categoryName.trim()) {
+    throw new Error('Please enter a valid category name.');
+  }
+
+  const name = categoryName.trim();
+
+  await setDoc(
+    doc(db, CATEGORIES_COLLECTION, categoryId(name)),
+    {
+      name,
+      active: true,
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
+
+  notifyCategoryUpdate();
+  return name;
+};
+
+/**
+ * Delete a category globally and reassign its existing products.
+ */
+export const deleteCategory = async categoryName => {
+  if (typeof categoryName !== 'string' || !categoryName.trim()) {
+    throw new Error('Invalid category name.');
+  }
+
+  const target = categoryName.trim();
+  const targetKey = normalize(target);
+
+  const categorySnapshot = await getDocs(
+    collection(db, CATEGORIES_COLLECTION)
+  );
+
+  const deletedNames = new Set();
+
+  categorySnapshot.forEach(categoryDoc => {
+    const data = categoryDoc.data();
+    if (data.active === false && data.name) {
+      deletedNames.add(normalize(data.name));
+    }
+  });
+
+  deletedNames.add(targetKey);
+
+  const remaining = [
+    ...DEFAULT_CATEGORIES,
+    ...categorySnapshot.docs
+      .filter(item => item.data().active !== false)
+      .map(item => item.data().name)
+  ].filter(name => name && !deletedNames.has(normalize(name)));
+
+  const fallbackCategory = remaining[0] || 'Bio Fertilizers';
+
+  // Reassign products in Firestore before marking the category deleted.
+  const productSnapshot = await getDocs(
+    collection(db, PRODUCTS_COLLECTION)
+  );
+
+  const updates = productSnapshot.docs
+    .filter(productDoc => {
+      const product = productDoc.data();
+      return normalize(product.category) === targetKey;
+    })
+    .map(productDoc =>
+      updateDoc(productDoc.ref, {
+        category: fallbackCategory,
+        updatedAt: serverTimestamp()
+      })
+    );
+
+  await Promise.all(updates);
+
+  // Keep a deletion record so default categories do not reappear.
+  await setDoc(
+    doc(db, CATEGORIES_COLLECTION, categoryId(target)),
+    {
+      name: target,
+      active: false,
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
+
+  notifyCategoryUpdate();
+
+  return {
+    deletedCategory: target,
+    reassignedProducts: updates.length,
+    fallbackCategory
+  };
+};
+
+export const getCategoryMeta = categoryName => {
+  const found = DEFAULT_CATEGORY_DATA.find(
+    category => normalize(category.title) === normalize(categoryName)
+  );
+
   if (found) return found;
 
   return {
@@ -200,4 +263,3 @@ export const getCategoryMeta = (categoryName) => {
     desc: `High-quality ${categoryName} formulations engineered for superior crop nutrition, protection, and yield.`
   };
 };
-
