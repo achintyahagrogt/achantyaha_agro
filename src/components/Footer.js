@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
-import { getAllCategories } from '../utils/categoryUtils';
-import logo from '../assets/logo.png';
+import {
+  getProducts as fetchCloudProducts,
+  subscribeProducts
+} from '../services/productService';import logo from '../assets/logo.png';
 import './Footer.css';
 
 const DEFAULT_CONTACT = {
@@ -15,19 +17,53 @@ const Footer = () => {
   const { t } = useLanguage();
   const location = useLocation();
 
-  const [footerCategories, setFooterCategories] = useState(() => getAllCategories());
+  const [footerProducts, setFooterProducts] = useState([]);
 
-  useEffect(() => {
-    const handleCatUpdate = () => {
-      setFooterCategories(getAllCategories());
-    };
-    window.addEventListener('achintyah_categories_updated', handleCatUpdate);
-    window.addEventListener('storage', handleCatUpdate);
-    return () => {
-      window.removeEventListener('achintyah_categories_updated', handleCatUpdate);
-      window.removeEventListener('storage', handleCatUpdate);
-    };
-  }, []);
+useEffect(() => {
+  let isMounted = true;
+
+  const loadProducts = async () => {
+    try {
+      const { products: cloudProducts } = await fetchCloudProducts();
+
+      if (isMounted) {
+        setFooterProducts(cloudProducts || []);
+      }
+    } catch (error) {
+      console.error('Footer product loading failed:', error);
+    }
+  };
+
+  // Initial product loading
+  loadProducts();
+
+  // Real-time Firestore updates
+  const unsubscribe = subscribeProducts(
+    (updatedProducts) => {
+      if (isMounted) {
+        setFooterProducts(updatedProducts || []);
+      }
+    },
+    (error) => {
+      console.error('Footer product subscription failed:', error);
+    }
+  );
+
+  // Listen for Admin Panel updates
+  window.addEventListener('achintyah_products_updated', loadProducts);
+  window.addEventListener('storage', loadProducts);
+
+  return () => {
+    isMounted = false;
+
+    if (typeof unsubscribe === 'function') {
+      unsubscribe();
+    }
+
+    window.removeEventListener('achintyah_products_updated', loadProducts);
+    window.removeEventListener('storage', loadProducts);
+  };
+}, []);
 
   const [contactInfo, setContactInfo] = useState(() => {
     try {
@@ -143,22 +179,23 @@ const Footer = () => {
           </div>
 
           <div className="footer-col">
-            <h4>{t('products')}</h4>
-            <ul>
-              {footerCategories.slice(0, 5).map(cat => (
-                <li key={cat}>
-                  <Link to={`/products?category=${encodeURIComponent(cat)}`}>
-                    {cat}
-                  </Link>
-                </li>
-              ))}
-              <li className="footer-more-cat-item">
-                <Link to="/products" className="footer-more-cat-link">
-                  Show More Categories →
-                </Link>
-              </li>
-            </ul>
-          </div>
+  <h4>{t('products')}</h4>
+  <ul>
+    {footerProducts.slice(0, 5).map(product => (
+      <li key={product.id}>
+        <Link to="/products">
+          {product.name}
+        </Link>
+      </li>
+    ))}
+
+    <li className="footer-more-cat-item">
+      <Link to="/products" className="footer-more-cat-link">
+        View All Products →
+      </Link>
+    </li>
+  </ul>
+</div>
 
           <div className="footer-col">
             <h4>{t('contactInfo')}</h4>
